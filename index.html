@@ -428,6 +428,111 @@ function deepPlayerHTML(hn,an,pr,lu){const TH=PLAYERS[slug+'|'+hn]||SQUADS[slug+
  +crow('En iyi oyuncu',H?pl(H.topRated):'-',A?pl(A.topRated):'-')+crow('En golcu',H?pl(H.topScorer):'-',A?pl(A.topScorer):'-')+crow('En cok asist',H?pl(H.topAssist):'-',A?pl(A.topAssist):'-')+crow('Sakat sayisi',H?H.inj.length:'-',A?A.inj.length:'-')+crow('Onemli sakat',H?H.keyInj.length:'-',A?A.keyInj.length:'-')+'</table></div>'
  +'<div class="grid">'+side(hn,H,lu?lu.home:null)+side(an,A,lu?lu.away:null)+'</div>'+adj}
 
+// ---- DERIN ANALIZ v2 (skor matrisi, tum pazarlar, form, H2H, deger) ----
+// Kalibrasyon: 15.910 maclik "onceki maclarla" geri teste dayanir (leakage yok).
+// 1X2 favorisinin isabeti: %30-40 bandi %40, %40-50 %40, %50-60 %46, %60-70 %52, %70+ %61
+// En iyi pazar seciminin isabeti: %50-60 %51, %60-70 %56, %70-80 %61, %80-90 %69, %90+ %76
+const CAL_BEST=[[0.90,0.76],[0.80,0.69],[0.70,0.61],[0.60,0.56],[0.50,0.51]];
+function calBest(p){for(const [lo,v] of CAL_BEST)if(p>=lo)return v;return 0.48}
+function _mx(lH,lA){const q=probsFrom(lH,lA);const M={};q.sc.forEach(e=>{M[e[1]+'-'+e[2]]=e[0]});return {q,M}}
+function deepMarkets(lH,lA){
+ const {q,M}=_mx(lH,lA);const G=(i,j)=>M[i+'-'+j]||0;
+ let dc1x=0,dc12=0,dcx2=0,dnb1=0,dnb2=0,tot={};let ev15=0,dep15=0,evWinNil=0,depWinNil=0,margin1=0,margin2p=0,kgUst=0,h1kg=0,h2kg=0,xkg=0;
+ for(let i=0;i<=9;i++)for(let j=0;j<=9;j++){const p=G(i,j);if(!p)continue;
+  if(i>=j)dc1x+=p; if(i!==j)dc12+=p; if(i<=j)dcx2+=p;
+  if(i-j>=2)ev15+=p; if(j-i>=2)dep15+=p;
+  if(i>j&&j===0)evWinNil+=p; if(j>i&&i===0)depWinNil+=p;
+  if(Math.abs(i-j)===1)margin1+=p; if(Math.abs(i-j)>=2)margin2p+=p;
+  if(i>0&&j>0){kgUst+=(i+j>=3?p:0); if(i>j)h1kg+=p; else if(j>i)h2kg+=p; else xkg+=p}
+  tot[i+j]=(tot[i+j]||0)+p}
+ const line=L=>{let u=0;for(const t in tot)if(+t>L)u+=tot[t];return u};
+ const teamTot=(isH,L)=>{let u=0;for(let i=0;i<=9;i++)for(let j=0;j<=9;j++){const g=isH?i:j;if(g>L)u+=G(i,j)}return u};
+ dnb1=q.p1/Math.max(1e-9,(q.p1+q.p2)); dnb2=q.p2/Math.max(1e-9,(q.p1+q.p2));
+ const ht=_mx(lH*0.44,lA*0.44).q; const T1=0.44*(lH+lA),T2=0.56*(lH+lA);
+ const bothHalves=1-Math.exp(-T1)-Math.exp(-T2)+Math.exp(-(T1+T2));
+ let h2more=0;for(let a=0;a<=8;a++)for(let b=0;b<=8;b++){if(b>a)h2more+=pois(a,T1)*pois(b,T2)}
+ return {q,M,dc1x,dc12,dcx2,dnb1,dnb2,ev15,dep15,evWinNil,depWinNil,margin1,margin2p,kgUst,h1kg,h2kg,xkg,line,teamTot,ht,bothHalves,h2more}}
+function tmMatches(tm){return (D.P[slug]||[]).filter(x=>x[1]===tm||x[3]===tm)}
+function _res(x,tm){const s=String(x[2]||'').split(':').map(Number);if(s.length<2||isNaN(s[0]))return null;const h=x[1]===tm;const gf=h?s[0]:s[1],ga=h?s[1]:s[0];return {date:x[0],gf,ga,home:h,r:gf>ga?'G':(gf<ga?'M':'B'),label:x[1]+' '+x[2]+' '+x[3]}}
+function _sum(arr){if(!arr.length)return null;let w=0,d=0,l=0,gf=0,ga=0,cs=0,fts=0,bt=0,o=0;arr.forEach(m=>{gf+=m.gf;ga+=m.ga;if(m.r==='G')w++;else if(m.r==='B')d++;else l++;if(!m.ga)cs++;if(!m.gf)fts++;if(m.gf&&m.ga)bt++;if(m.gf+m.ga>=3)o++});const n=arr.length;return {n,w,d,l,gf,ga,ppg:(w*3+d)/n,cs:cs/n*100,fts:fts/n*100,bt:bt/n*100,o25:o/n*100}}
+function _streak(arr,pred){let c=0;for(const m of arr){if(pred(m))c++;else break}return c}
+const _MON={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+function _ord(ds){const p=String(ds||'').trim().split(/\s+/);if(p.length<2)return null;const mo=_MON[p[p.length-1]]||_MON[String(p[1]||'').slice(0,3)];const dy=parseInt(p[p.length-2]);if(!mo||isNaN(dy))return null;return ((mo<8?mo+12:mo)*31+dy)}
+function formDetail(tm,fixDate){const list=tmMatches(tm).map(x=>_res(x,tm)).filter(Boolean);
+ const last5=list.slice(0,5),last10=list.slice(0,10);
+ const home5=list.filter(m=>m.home).slice(0,5),away5=list.filter(m=>!m.home).slice(0,5);
+ let rest=null;const fo=_ord(fixDate),lo=list.length?_ord(list[0].date):null;
+ if(fo&&lo){let df=fo-lo;if(df<0)df+=372;if(df>=0&&df<=45)rest=df}
+ return {list,last5,last10,home5,away5,
+  s5:_sum(last5),s10:_sum(last10),sH:_sum(home5),sA:_sum(away5),rest,
+  stW:_streak(list,m=>m.r==='G'),stUB:_streak(list,m=>m.r!=='M'),stScore:_streak(list,m=>m.gf>0),stBT:_streak(list,m=>m.gf>0&&m.ga>0),stWL:_streak(list,m=>m.r!=='G')}}
+function h2hDetail(hn,an){const ms=(D.P[slug]||[]).filter(x=>(x[1]===hn&&x[3]===an)||(x[1]===an&&x[3]===hn));
+ let w=0,d=0,l=0,gf=0,ga=0;const det=ms.slice(0,5).map(x=>{const m=_res(x,hn);if(m){gf+=m.gf;ga+=m.ga;if(m.r==='G')w++;else if(m.r==='B')d++;else l++}return x});
+ return {n:ms.length,w,d,l,gf,ga,det}}
+function deepAnalysisHTML(hn,an,lH,lA,dateStr,kind,I){
+ const dm=deepMarkets(lH,lA),q=dm.q,P=v=>'%'+(v*100).toFixed(1);
+ window._curProbs={p1:q.p1,px:q.px,p2:q.p2,o25:q.o25,bt:q.bt,hn,an};
+ const pc=v=>'<b>'+P(v)+'</b>';
+ const row=(lab,v)=>`<div class="bar-row"><div class="lab"><span>${lab}</span><b>${P(v)}</b></div><div class="prob"><i style="width:${(v*100).toFixed(1)}%"></i></div></div>`;
+ // Skor matrisi 0-5
+ let mx='<div class="tablewrap"><table style="min-width:0;font-size:11px"><tr><th>EV\\DEP</th>'+[0,1,2,3,4,5].map(j=>'<th>'+j+'</th>').join('')+'</tr>';
+ for(let i=0;i<=5;i++){mx+='<tr><th>'+i+'</th>';for(let j=0;j<=5;j++){const p=dm.M[i+'-'+j]||0;mx+='<td style="background:rgba(34,197,94,'+Math.min(0.85,p*5).toFixed(2)+')">'+(p*100).toFixed(1)+'</td>'}mx+='</tr>'}
+ mx+='</table></div>';
+ // Secim siralamasi
+ const cands=[['1 · '+hn,q.p1],['X · Beraberlik',q.px],['2 · '+an,q.p2],['1X Çifte Şans',dm.dc1x],['12 Çifte Şans',dm.dc12],['X2 Çifte Şans',dm.dcx2],
+  ['Beraberlik İade 1 (DNB)',dm.dnb1],['Beraberlik İade 2 (DNB)',dm.dnb2],
+  ['0.5 Üst',dm.line(0.5)],['1.5 Üst',q.o15],['2.5 Üst',q.o25],['2.5 Alt',1-q.o25],['3.5 Üst',q.o35],['3.5 Alt',1-q.o35],['4.5 Alt',1-dm.line(4.5)],
+  ['KG Var',q.bt],['KG Yok',1-q.bt],['KG Var + 2.5 Üst',dm.kgUst],
+  [hn+' 0.5 Üst (takım golü)',dm.teamTot(true,0.5)],[hn+' 1.5 Üst',dm.teamTot(true,1.5)],[an+' 0.5 Üst (takım golü)',dm.teamTot(false,0.5)],[an+' 1.5 Üst',dm.teamTot(false,1.5)],
+  [hn+' 2+ farkla kazanır',dm.ev15],[an+' 2+ farkla kazanır',dm.dep15],[hn+' gol yemeden kazanır',dm.evWinNil],[an+' gol yemeden kazanır',dm.depWinNil]];
+ const picks=cands.filter(c=>c[1]>=0.55).sort((a,b)=>b[1]-a[1]).slice(0,8);
+ const pickRows=picks.map((c,ix)=>{const hb=calBest(c[1]);const em=c[1]>=0.75?'🔥':(c[1]>=0.65?'✅':'▫️');return '<tr><td>'+(ix+1)+'</td><td style="text-align:left">'+em+' '+c[0]+'</td><td><b>'+P(c[1])+'</b></td><td>~%'+Math.round(hb*100)+'</td></tr>'}).join('');
+ // Form detay
+ const fH=formDetail(hn,dateStr),fA=formDetail(an,dateStr);
+ const fcell=s=>s?('G'+s.w+' B'+s.d+' M'+s.l+' | '+s.gf+'-'+s.ga+' | Puan/Maç '+s.ppg.toFixed(2)+' | KG%'+Math.round(s.bt)+' KaleKapama%'+Math.round(s.cs)):'veri yok';
+ const warns=[];
+ if(fH.s5&&fH.s5.n<5)warns.push(hn+' son 5 verisi eksik (bu sezon '+fH.s5.n+' maç) — olasılıklar daha oynak');
+ if(fA.s5&&fA.s5.n<5)warns.push(an+' son 5 verisi eksik (bu sezon '+fA.s5.n+' maç)');
+ if(Math.abs(lH-lA)<0.30)warns.push('Beklenen goller yakın ('+lH.toFixed(2)+' - '+lA.toFixed(2)+'): kırılgan maç, 1X2 yerine gol pazarları tarihsel olarak daha isabetli oldu');
+ if(q.px>=0.27)warns.push('Beraberlik olasılığı yüksek: '+P(q.px));
+ if(I&&I.cov<50)warns.push('Veri kapsama düşük (%'+I.cov+') — kadro/sakat verisi sınırlı, güven sınırlandı');
+ if(fH.rest!=null&&fH.rest<=3)warns.push(hn+' sadece '+fH.rest+' gün dinlendi (yorgunluk riski)');
+ if(fA.rest!=null&&fA.rest<=3)warns.push(an+' sadece '+fA.rest+' gün dinlendi (yorgunluk riski)');
+ const h2=h2hDetail(hn,an);
+ const streakLine=f=>{const a=[];if(f.stW>=2)a.push('galibiyet serisi: '+f.stW);if(f.stUB>=4)a.push('yenilmezlik: '+f.stUB);if(f.stScore>=4)a.push('gol atma serisi: '+f.stScore);if(f.stBT>=3)a.push('KG Var serisi: '+f.stBT);if(f.stWL>=4)a.push('kazanamama: '+f.stWL);return a.length?a.join(' • '):'belirgin seri yok'};
+ return `<h3>🔬 Derin Analiz <span class="note">(skor matrisi + tüm pazarlar)</span></h3>
+ <h4>🎯 Skor Olasılık Matrisi (%)</h4>${mx}<p class="note">Satır: ${hn} golü, Sütun: ${an} golü. En olası skorlar: ${q.sc.slice(0,5).map(x=>'<b>'+x[1]+'-'+x[2]+'</b> ('+P(x[0])+')').join(' • ')}</p>
+ <h4>⭐ Maçın En Güçlü Seçimleri</h4><div class="tablewrap"><table style="min-width:0"><tr><th>#</th><th>Seçim</th><th>Olasılık</th><th>Geçmiş isabet*</th></tr>${pickRows||'<tr><td colspan="4">%55 üstü seçim yok — bu maç belirsiz, pas geçmek de bir seçimdir.</td></tr>'}</table></div>
+ <p class="note">* "Geçmiş isabet": 15.910 maçlık ileri-yürüyüş geri testinde, aynı olasılık bandındaki seçimlerin tarihsel tutma oranı. Olasılık %70 olsa bile ~%61 tuttu; garanti değildir, beklenti yönetimidir.</p>
+ ${row('1X (Ev veya Beraberlik)',dm.dc1x)}${row('12 (Beraberlik yok)',dm.dc12)}${row('X2 (Dep veya Beraberlik)',dm.dcx2)}
+ ${row('0.5 Üst',dm.line(0.5))}${row('1.5 Üst',q.o15)}${row('2.5 Üst',q.o25)}${row('3.5 Üst',q.o35)}${row('4.5 Üst',dm.line(4.5))}
+ ${row('KG Var + 2.5 Üst',dm.kgUst)}${row(hn+' takım 1.5 Üst',dm.teamTot(true,1.5))}${row(an+' takım 1.5 Üst',dm.teamTot(false,1.5))}
+ ${row(hn+' 2+ farkla',dm.ev15)}${row(an+' 2+ farkla',dm.dep15)}${row(hn+' gol yemeden kazanır',dm.evWinNil)}${row(an+' gol yemeden kazanır',dm.depWinNil)}
+ ${row('Maç 1 farkla biter',dm.margin1)}${row('Maç 2+ farkla biter',dm.margin2p)}
+ <h4>⏱ İlk Yarı (yaklaşık)</h4>
+ ${row('İY 1',dm.ht.p1)}${row('İY X',dm.ht.px)}${row('İY 2',dm.ht.p2)}${row('İY 0.5 Üst',1-Math.exp(-(lH+lA)*0.44))}${row('İki yarıda da gol olur',dm.bothHalves)}${row('2. yarıda daha çok gol',dm.h2more)}
+ <p class="note">İY hesabı, gollerin ~%44'ünün ilk yarıda atıldığı varsayımına dayanır (geri teste İY sonucu isabeti ~%41 — MS tahmininden zayıftır, destekleyici bilgi olarak kullan).</p>
+ <h4>📈 Form Detayı (son 10 maç)</h4>
+ <div class="tablewrap"><table style="min-width:0"><tr><th></th><th>${hn}</th><th>${an}</th></tr>
+ <tr><td style="text-align:left">Son 5</td><td style="text-align:left">${fcell(fH.s5)}</td><td style="text-align:left">${fcell(fA.s5)}</td></tr>
+ <tr><td style="text-align:left">Son 10</td><td style="text-align:left">${fcell(fH.s10)}</td><td style="text-align:left">${fcell(fA.s10)}</td></tr>
+ <tr><td style="text-align:left">Ev/Dep son 5</td><td style="text-align:left">${fcell(fH.sH)}</td><td style="text-align:left">${fcell(fA.sA)}</td></tr>
+ <tr><td style="text-align:left">Seriler</td><td style="text-align:left">${streakLine(fH)}</td><td style="text-align:left">${streakLine(fA)}</td></tr>
+ <tr><td style="text-align:left">Dinlenme</td><td>${fH.rest!=null?fH.rest+' gün':'-'}</td><td>${fA.rest!=null?fA.rest+' gün':'-'}</td></tr></table></div>
+ <h4>🤝 İkili Geçmiş (H2H)</h4>${h2.n?('<p class="note">Bu sezon ligde '+h2.n+' kez karşılaştılar: '+hn+' '+h2.w+'G '+h2.d+'B '+h2.l+'M (gol '+h2.gf+'-'+h2.ga+')</p>'+h2.det.map(x=>'<div class="match"><span class="date">'+x[0]+'</span><span class="tm r">'+x[1]+'</span><span class="score">'+x[2]+'</span><span class="tm">'+x[3]+'</span></div>').join('')):'<p class="note">Bu sezon ligde karşılaşmamışlar (veya veri yok).</p>'}
+ ${warns.length?('<div class="box" style="background:#2a2113;border-color:#6b5518"><b>⚠️ Risk / Notlar</b><br>'+warns.map(w=>'• '+w).join('<br>')+'</div>'):''}
+ <h4>💰 Oran Değer Hesabı</h4><p class="note">Oynayacağın oranları yaz; model, oranın adil olup olmadığını (kenar/edge) ve Kelly ölçütüyle kasanın en fazla yüzde kaçının uygun olduğunu söyler. Negatif kenar = uzun vadede kaybettiren oran.</p>
+ <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+ <input id="ov1" inputmode="decimal" placeholder="1 oranı"><input id="ovx" inputmode="decimal" placeholder="X oranı"><input id="ov2" inputmode="decimal" placeholder="2 oranı"><input id="ov25" inputmode="decimal" placeholder="2.5 Üst"><input id="ovbt" inputmode="decimal" placeholder="KG Var"></div>
+ <button class="chip" style="margin-top:8px" onclick="computeOdds()">💰 Değeri Hesapla</button><div id="oddsOut" style="margin-top:8px"></div>`}
+window.computeOdds=()=>{const c=window._curProbs;if(!c)return;const g=id=>{const v=parseFloat((document.getElementById(id).value||'').replace(',','.'));return v>1?v:null};
+ const rows=[['Maç sonucu 1',c.p1,g('ov1')],['Maç sonucu X',c.px,g('ovx')],['Maç sonucu 2',c.p2,g('ov2')],['2.5 Üst',c.o25,g('ov25')],['KG Var',c.bt,g('ovbt')]].filter(r=>r[2]);
+ if(!rows.length){document.getElementById('oddsOut').innerHTML='<p class="note">En az bir oran yaz.</p>';return}
+ document.getElementById('oddsOut').innerHTML='<div class="tablewrap"><table style="min-width:0"><tr><th>Seçim</th><th>Adil oran</th><th>Senin oranın</th><th>Kenar</th><th>Kelly</th><th>Yorum</th></tr>'+
+ rows.map(r=>{const edge=r[1]*r[2]-1;const kelly=Math.max(0,Math.min(0.25,(r[1]*(r[2]-1)-(1-r[1]))/(r[2]-1)));
+  const y=edge>=0.08?'✅ Değerli':(edge>=0.02?'🟡 Sınırda değerli':(edge>=-0.03?'⚪ Adile yakın':'❌ Değer yok'));
+  return '<tr><td style="text-align:left">'+r[0]+'</td><td>'+(1/r[1]).toFixed(2)+'</td><td>'+r[2].toFixed(2)+'</td><td>'+(edge>=0?'+':'')+(edge*100).toFixed(1)+'%</td><td>%'+(kelly*100).toFixed(1)+'</td><td>'+y+'</td></tr>'}).join('')+'</table></div><p class="note">Kelly: matematiksel üst sınırdır; pratikte bunun yarısı/çeyreği daha güvenlidir. Kenar pozitif olsa bile tek maç her zaman kaybedebilir.</p>'};
+
 window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,scoreStr,kind];const pr=predictMatch(hn,an),key=slug+'|'+hn+'|'+an,lu=LINEUPS[key];
  const bar=(t,v)=>pr?`<div class="bar-row"><div class="lab"><span>${t}</span><b>%${(v*100).toFixed(1)}</b></div><div class="prob"><i style="width:${(v*100).toFixed(1)}%"></i></div></div>`:'';
  let lup='';
@@ -442,6 +547,7 @@ window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,s
  const integ=pr?integratedPredict(hn,an,pr):null;
  const sqp=squadPowerHTML(hn,an,integ);
  const fq=integ?integ.q:pr;
+ const dhtml=pr?deepAnalysisHTML(hn,an,integ?integ.lH:pr.lH,integ?integ.lA:pr.lA,dateStr,kind,integ):'';
  const pct=v=>'%'+(v>=0?'+':'')+(v*100).toFixed(1);
  const integHTML=integ?('<h4>🧠 Nihai tahmin nasıl oluştu?</h4><p class="note">Temel Poisson xG ('+pr.lH.toFixed(2)+' — '+pr.lA.toFixed(2)+'), aşağıdaki faktörlerle düzeltilerek nihai xG ('+integ.lH.toFixed(2)+' — '+integ.lA.toFixed(2)+') elde edildi. Etkiler sınırlı (maks. ±%32) ve şeffaf gösterilir; kesin sonuç garantisi vermez.</p>'
   +(integ.rows.length?'<div class="tablewrap"><table style="min-width:0"><tr><th>Faktör</th><th>'+hn+' xG etkisi</th><th>'+an+' xG etkisi</th></tr>'+integ.rows.map(r=>'<tr><td style="text-align:left">'+r.lab+'</td><td>'+pct(r.fh-1)+'</td><td>'+pct(r.fa-1)+'</td></tr>').join('')+'</table></div>':'<p class="note">Ek faktör bulunamadı; temel tahmin kullanıldı.</p>')
@@ -464,7 +570,7 @@ window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,s
  ${pwr}
  ${deep}
  ${sqp}
- <h3>🎯 Nihai Tahmin <span class="note">(tüm faktörler dahil)</span></h3>${pr?`<div class="big">${(integ?integ.lH:pr.lH).toFixed(2)} — ${(integ?integ.lA:pr.lA).toFixed(2)}</div><p class="note" style="text-align:center">Nihai beklenen gol (xG) — sezon istatistiği + kadro gücü + form + sakatlar</p>${bar('1 · '+hn,fq.p1)}${bar('X · Beraberlik',fq.px)}${bar('2 · '+an,fq.p2)}${bar('2.5 Üst',fq.o25)}${bar('KG Var',fq.bt)}<p>En olası: ${fq.sc.slice(0,5).map(x=>`<b>${x[1]}-${x[2]}</b> (%${(x[0]*100).toFixed(1)})`).join(' • ')}</p>${integHTML}`:'<p class="note">Bu maç için yeterli istatistik yok.</p>'}
+ <h3>🎯 Nihai Tahmin <span class="note">(tüm faktörler dahil)</span></h3>${pr?`<div class="big">${(integ?integ.lH:pr.lH).toFixed(2)} — ${(integ?integ.lA:pr.lA).toFixed(2)}</div><p class="note" style="text-align:center">Nihai beklenen gol (xG) — sezon istatistiği + kadro gücü + form + sakatlar</p>${bar('1 · '+hn,fq.p1)}${bar('X · Beraberlik',fq.px)}${bar('2 · '+an,fq.p2)}${bar('2.5 Üst',fq.o25)}${bar('KG Var',fq.bt)}<p>En olası: ${fq.sc.slice(0,5).map(x=>`<b>${x[1]}-${x[2]}</b> (%${(x[0]*100).toFixed(1)})`).join(' • ')}</p>${integHTML}`:'<p class="note">Bu maç için yeterli istatistik yok.</p>'}${dhtml}
  <h3>⚖️ Karşılaştırma</h3><div class="tablewrap"><table style="min-width:0"><tr><th>${hn}</th><th></th><th>${an}</th></tr>
  ${cmp('Sıra',rank(hn),rank(an))}${cmp('Puan',hm.Pts,am.Pts)}${cmp('Maç başı puan',hm.PPG,am.PPG)}${cmp('Hücum gücü',hm.attack_strength,am.attack_strength)}${cmp('Savunma (küçük iyi)',hm.defence_strength,am.defence_strength)}${cmp('Gol/maç',hm.GF_per_match,am.GF_per_match)}${cmp('2.5 Üst %',hm.over25_pct,am.over25_pct)}${cmp('KG Var %',hm.btts_pct,am.btts_pct)}${cmp('Gol yemedi %',hm.clean_sheet_pct,am.clean_sheet_pct)}${cmp('Ev/Dep PPG',hm.home_PPG,am.away_PPG)}${cmp('Son 5 (G-B-M)',_fH.w+'-'+_fH.d+'-'+_fH.l,_fA.w+'-'+_fA.d+'-'+_fA.l)}${cmp('Son 5 gol (atılan-yenilen)',_fH.gf+'-'+_fH.ga,_fA.gf+'-'+_fA.ga)}${cmp('Son 5 puan ortalaması',_fH.n?(_fH.pts/_fH.n).toFixed(2):'-',_fA.n?(_fA.pts/_fA.n).toFixed(2):'-')}</table></div>
  <p class="note">⚖️ Karşılaştırma iki takım için de <b>son 5 maç</b> üzerinden yapılır${(_shownH<5||_shownA<5)?' (bir takımın bu sezon toplam maçı 5\'ten azsa, oynadığı maçların tamamı kullanılır)':''}.</p>
