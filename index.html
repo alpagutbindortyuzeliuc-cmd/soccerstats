@@ -414,7 +414,7 @@ function squadStrength(T){if(!T||!T.squad||!T.squad.length)return null;const sq=
   inj:sq.filter(p=>p.inj),top:[...rated].sort((a,b)=>b.r-a.r).slice(0,3),
   xiText:xi.map(p=>p.pos+' '+p.n+(p.r?' ('+(+p.r).toFixed(2)+')':'')).join(', ')}}
 function last5Of(tm){const arr=(D.P[slug]||[]).filter(x=>x[1]===tm||x[3]===tm).slice(0,5);let w=0,d=0,l=0,gf=0,ga=0;arr.forEach(x=>{const s=String(x[2]||'').split(':').map(Number);if(s.length<2||isNaN(s[0]))return;const h=x[1]===tm,g1=h?s[0]:s[1],g2=h?s[1]:s[0];gf+=g1;ga+=g2;if(g1>g2)w++;else if(g1<g2)l++;else d++});return {n:arr.length,ppg:arr.length?(w*3+d)/arr.length:0,gf,ga}}
-function integratedPredict(hn,an,pr){if(!pr)return null;const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+function integratedPredict(hn,an,pr,luObj){if(!pr)return null;const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
  const SH=squadStrength(getSquad(slug,hn)),SA=squadStrength(getSquad(slug,an));
  const DH=teamDeep(getSquad(slug,hn),null),DA=teamDeep(getSquad(slug,an),null);
  const FH=last5Of(hn),FA=last5Of(an);let fH=1,fA=1;const rows=[];
@@ -427,6 +427,12 @@ function integratedPredict(hn,an,pr){if(!pr)return null;const clamp=(v,lo,hi)=>M
  if(FH.n&&FA.n){const f=clamp(1+0.045*(FH.ppg-FA.ppg),0.93,1.07);fH*=f;fA/=f;rows.push({lab:'Form — son 5 maç ('+hn+' '+FH.ppg.toFixed(2)+' puan/maç, '+an+' '+FA.ppg.toFixed(2)+')',fh:f,fa:1/f,side:FH.ppg>FA.ppg?1:2})}
  if(DH&&(DH.goalShare>0.02||DH.defShare>0.02)){const a1=1-0.6*DH.goalShare,a2=1+0.35*DH.defShare;fH*=a1;fA*=a2;rows.push({lab:'🏥 '+hn+' eksikleri (gol katkısı kaybı %'+Math.round(DH.goalShare*100)+', savunma kaybı %'+Math.round(DH.defShare*100)+')',fh:a1,fa:a2,side:2})}
  if(DA&&(DA.goalShare>0.02||DA.defShare>0.02)){const a2=1-0.6*DA.goalShare,a1=1+0.35*DA.defShare;fH*=a1;fA*=a2;rows.push({lab:'🏥 '+an+' eksikleri (gol katkısı kaybı %'+Math.round(DA.goalShare*100)+', savunma kaybı %'+Math.round(DA.defShare*100)+')',fh:a1,fa:a2,side:1})}
+ if(luObj&&luObj.home&&luObj.away&&SH&&SA&&SH.bestXI&&SA.bestXI){
+  const avgXI=s=>{const r=(s.xi||[]).map(p=>+p.rating).filter(v=>v>0);return r.length>=6?r.reduce((a,b)=>a+b,0)/r.length:null};
+  const xH=avgXI(luObj.home),xA=avgXI(luObj.away);
+  if(xH&&xA){const dH=xH-SH.bestXI,dA=xA-SA.bestXI;
+   if(Math.abs(dH)>=0.08||Math.abs(dA)>=0.08){const aH=clamp(Math.exp(0.22*dH),0.95,1.05),aA=clamp(Math.exp(0.22*dA),0.95,1.05);fH*=aH;fA*=aA;
+    rows.push({lab:"Sahaya \u00E7\u0131kan 11'in kalitesi (sezon en iyi 11'ine g\u00F6re fark: "+hn+" "+(dH>=0?"+":"")+dH.toFixed(2)+", "+an+" "+(dA>=0?"+":"")+dA.toFixed(2)+")",fh:aH,fa:aA,side:dH>=dA?1:2})}}}
  fH=clamp(fH,0.72,1.32);fA=clamp(fA,0.72,1.32);const lH=pr.lH*fH,lA=pr.lA*fA,q=probsFrom(lH,lA);
  const fav=q.p1>=q.p2?1:2;let agree=0,total=0;rows.forEach(r=>{if(Math.abs(r.fh-1)>=0.01){total++;if(r.side===fav)agree++}});
  const markets=[['Maç sonucu 1 ('+hn+')',q.p1],['Maç sonucu X (beraberlik)',q.px],['Maç sonucu 2 ('+an+')',q.p2],['2.5 Üst',q.o25],['2.5 Alt',1-q.o25],['KG Var',q.bt],['KG Yok',1-q.bt],['1.5 Üst',q.o15],['3.5 Alt',1-q.o35]];
@@ -627,7 +633,7 @@ window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,s
  }
  const pwr=(luUse&&(luUse.status==='confirmed'||luUse.status==='predicted'||luUse.status==='last11'||luUse.status==='derived'))?playerPowerHTML(hn,an,luUse):'';
  const deep=deepPlayerHTML(hn,an,pr,luUse&&luUse.status!=='none'?luUse:null);
- const integ=pr?integratedPredict(hn,an,pr):null;
+ const integ=pr?integratedPredict(hn,an,pr,luUse):null;
  const sqp=squadPowerHTML(hn,an,integ);
  const fq=integ?integ.q:pr;
  const dhtml=pr?deepAnalysisHTML(hn,an,integ?integ.lH:pr.lH,integ?integ.lA:pr.lA,dateStr,kind,integ):'';
