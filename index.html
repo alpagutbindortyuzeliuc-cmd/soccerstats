@@ -150,7 +150,7 @@ const RB=(()=>{const v=localStorage.getItem('ss_remote')||'';return v?v.replace(
 async function loadLineups(){if(!location.protocol.startsWith('http')&&!RB)return;
  try{const r=await fetch(RB+'lineups.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();LINEUPS=j.matches||LINEUPS}}catch(e){}
  try{const r=await fetch(RB+'players.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();PLAYERS=j.teams||PLAYERS}}catch(e){}
- try{const r=await fetch(RB+'squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();SQUADS=j.teams||SQUADS}}catch(e){}}
+ try{const r=await fetch(RB+'squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();SQUADS=j.teams||SQUADS}}catch(e){} try{const _lx=JSON.parse(localStorage.getItem('ss_lineups_extra')||'{}');for(const k in _lx){if(!LINEUPS[k])LINEUPS[k]=_lx[k]}}catch(e){}}
 loadLineups();
 // ---- CANLI KADRO KONTROLU (FotMob, dogrudan tarayicidan) ----
 const FM_POS={0:'KL',1:'DEF',2:'ORT',3:'FOR'};
@@ -163,8 +163,70 @@ function simName(a,b){a=normName(a);b=normName(b);if(!a||!b)return 0;if(a===b)re
  const ta=new Set(a.split(' ')),tb=new Set(b.split(' '));const jac=[...ta].filter(x=>tb.has(x)).length/Math.max(1,new Set([...ta,...tb]).size);
  return Math.max(dice,(dice+jac)/2)}
 async function fmJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('FotMob '+r.status);return r.json()}
-const FM_ALIAS={'guadalajara':'chivas','chivas':'guadalajara','pumas unam':'pumas'};
+const FM_ALIAS={'guadalajara':'chivas','chivas':'guadalajara','pumas unam':'pumas','nottm forest':'nottingham'};
 function bestSim(a,b){let s=simName(a,b);const na=normName(a),nb=normName(b);if(FM_ALIAS[na])s=Math.max(s,simName(FM_ALIAS[na],b));if(FM_ALIAS[nb])s=Math.max(s,simName(a,FM_ALIAS[nb]));return s}
+// ---- ESPN YEDEK KADRO KAYNAGI (FotMob bulamazsa) ----
+const ESPN_MAP={england:'eng.1',spain:'esp.1',germany:'ger.1',italy:'ita.1',france:'fra.1',turkey:'tur.1',Netherlands:'ned.1',portugal:'por.1',usa:'usa.1',mexico:'mex.1',Brazil:'bra.1',Argentina:'arg.1',championsleague:'uefa.champions',europaleague:'uefa.europa',conferenceleague:'uefa.europa.conf'};
+const ESPN_SCAN=['eng.1','esp.1','ger.1','ita.1','fra.1','tur.1','ned.1','por.1','uefa.champions','uefa.europa','mex.1','usa.1','bra.1','arg.1'];
+function espPos(a){a=String(a||'').toUpperCase();if(a.startsWith('G'))return 'KL';if(/^DM|CDM/.test(a))return 'ORT';if(a.includes('D')||a.endsWith('B'))return 'DEF';if(a.startsWith('F')||a.startsWith('ST')||a.includes('CF')||a.includes('W'))return 'FOR';return 'ORT'}
+async function espnJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('ESPN '+r.status);return r.json()}
+function persistLineups(){try{const keep={};for(const k in LINEUPS){const v=LINEUPS[k];if(v&&(v.status==='confirmed'||v.status==='predicted'||v.status==='last11'))keep[k]=v}localStorage.setItem('ss_lineups_extra',JSON.stringify(keep))}catch(e){}}
+async function espnLineupCheck(hn,an,dateStr,scoreStr,kind){
+ const key=slug+'|'+hn+'|'+an;const cur=LINEUPS[key];
+ if(cur&&(cur.status==='confirmed'||cur.status==='predicted'||cur.status==='last11'))return false;
+ const ko=kind==='fixture'?kickoffDate(dateStr,scoreStr):kickoffDate(dateStr,'12:00');
+ const days=ko?[-1,0,1].map(dlt=>new Date(ko.getTime()+dlt*864e5)):[new Date()];
+ const codes=ESPN_MAP[slug]?[ESPN_MAP[slug]]:ESPN_SCAN;
+ let best=null,bs=0,bcode='';
+ for(const code of codes){for(const d of days){const ymd=d.toISOString().slice(0,10).replace(/-/g,'');
+   let j;try{j=await espnJSON('https://site.api.espn.com/apis/site/v2/sports/soccer/'+code+'/scoreboard?dates='+ymd)}catch(e){continue}
+   for(const ev of (j.events||[])){const comp=((ev.competitions||[])[0]||{});const cs=comp.competitors||[];
+    const H=cs.find(c=>c.homeAway==='home')||cs[0]||{},A=cs.find(c=>c.homeAway==='away')||cs[1]||{};
+    const s=(bestSim(hn,((H.team||{}).displayName)||'')+bestSim(an,((A.team||{}).displayName)||''))/2;
+    if(s>bs){bs=s;best=ev;bcode=code}}}
+  if(best&&bs>=0.6)break}
+ if(!best||bs<0.6)return false;
+ try{const s=await espnJSON('https://site.api.espn.com/apis/site/v2/sports/soccer/'+bcode+'/summary?event='+best.id);
+  const side=ha=>{const r=(s.rosters||[]).find(x=>x.homeAway===ha)||{};const P=x=>({no:x.jersey||'',name:(x.athlete||{}).displayName||'',pos:espPos((x.position||{}).abbreviation),rating:null,age:null,value:null});
+   const ros=r.roster||[];return {formation:r.formation||'',xi:ros.filter(x=>x.starter).map(P),subs:ros.filter(x=>!x.starter).map(P)}};
+  const home=side('home'),away=side('away');
+  if(home.xi.length===11&&away.xi.length===11){LINEUPS[key]={status:'confirmed',lineup_type:'espn',home:home,away:away,checked_at:new Date().toLocaleString('tr-TR'),source:'ESPN (yedek kaynak)'};persistLineups();return true}
+ }catch(e){}
+ return false}
+// ---- FLASHSCORE KADRO KAYNAGI (FotMob bulamazsa; genis lig kapsami) ----
+async function fsText(u){const r=await fetch(u,{headers:{'x-fsign':'SW9D1eZo'},cache:'no-store'});if(!r.ok)throw new Error('FlashScore '+r.status);return r.text()}
+function fsParse(txt){return String(txt||'').split('~').map(r=>{const o={};r.split('\u00AC').forEach(p=>{const i=p.indexOf('\u00F7');if(i>0)o[p.slice(0,i)]=p.slice(i+1)});return o}).filter(o=>Object.keys(o).length)}
+async function fsLineupCheck(hn,an,dateStr,scoreStr,kind){
+ const key=slug+'|'+hn+'|'+an;const cur=LINEUPS[key];
+ if(cur&&(cur.status==='confirmed'||cur.status==='predicted'||cur.status==='last11'))return false;
+ const ko=kind==='fixture'?kickoffDate(dateStr,scoreStr):kickoffDate(dateStr,'12:00');
+ const W=t=>Math.floor((t/1000-72000)/86400);const kk=ko?W(ko.getTime())-W(Date.now()):0;
+ let evId=null;
+ for(const off of [kk,kk-1,kk+1]){
+  let recs;try{recs=fsParse(await fsText('https://www.flashscore.com/x/feed/f_1_'+off+'_3_en_1'))}catch(e){continue}
+  let bs=0;
+  for(const f of recs){if(!f.AA||!f.AE)continue;
+   const s=(bestSim(hn,f.AE)+bestSim(an,f.AF||''))/2;
+   if(s>bs){bs=s;evId=f.AA}}
+  if(evId&&bs>=0.6)break; evId=null}
+ if(!evId)return false;
+ let recs;try{recs=fsParse(await fsText('https://www.flashscore.com/x/feed/df_li_1_'+evId))}catch(e){return false}
+ const sides={1:{formation:'',xi:[],subs:[]},2:{formation:'',xi:[],subs:[]}};const raw={1:[],2:[]};
+ let team=1,mode='start',predicted=false;
+ for(const f of recs){
+  if(f.LB){if(f.LC)team=+f.LC;if(/Substitutes/i.test(f.LB))mode='sub';else{mode='start';if(/Predicted/i.test(f.LB))predicted=true}continue}
+  if(f.LC&&!f.LI){team=+f.LC;continue}
+  if(f.LI){if(f.LD&&!sides[team].formation)sides[team].formation=f.LD;
+   raw[team].push({no:f.LJ||'',name:f.LI,rating:f.LPR?+f.LPR:null,age:null,value:null,slot:+f.LL||(raw[team].length+1),gk:/Goalkeeper/i.test(f.LS||''),mode})}}
+ const mapPos=(tm,p)=>{if(p.gk)return 'KL';let parts=String(sides[tm].formation||'').split('-').map(Number).filter(x=>x>0);
+  if(parts.length&&parts[0]===1)parts=parts.slice(1);
+  if(parts.length>=2){let acc=1;if(p.slot<=1)return 'KL';for(let i=0;i<parts.length;i++){acc+=parts[i];if(p.slot<=acc)return i===0?'DEF':(i===parts.length-1?'FOR':'ORT')}return 'FOR'}
+  return p.slot<=1?'KL':(p.slot<=5?'DEF':(p.slot<=9?'ORT':'FOR'))};
+ for(const tm of [1,2]){for(const p of raw[tm]){const q={no:p.no,name:p.name,pos:mapPos(tm,p),rating:p.rating,age:null,value:null};(p.mode==='start'?sides[tm].xi:sides[tm].subs).push(q)}}
+ const home=sides[1],away=sides[2];
+ if(home.xi.length===11&&away.xi.length===11){
+  LINEUPS[key]={status:predicted?'predicted':'confirmed',lineup_type:'flashscore',home:home,away:away,checked_at:new Date().toLocaleString('tr-TR'),source:'FlashScore (canlı)'};persistLineups();return true}
+ return false}
 async function liveLineupCheck(hn,an,dateStr,scoreStr,kind,force){
  const key=slug+'|'+hn+'|'+an;
  if(_liveBusy[key])return;
@@ -172,7 +234,9 @@ async function liveLineupCheck(hn,an,dateStr,scoreStr,kind,force){
  if(cur&&cur.status==='confirmed'&&!force)return;
  if(!force&&_liveTs[key]&&Date.now()-_liveTs[key]<5*60000)return;
  const ko=kind==='fixture'?kickoffDate(dateStr,scoreStr):kickoffDate(dateStr,'12:00');
- if(!force&&ko){const mins=(ko-Date.now())/60000; if(kind==='fixture'&&(mins>150||mins<-300))return; if(kind!=='fixture'&&Math.abs(mins)>2880)return}
+ if(!force&&ko){const mins=(ko-Date.now())/60000; const usable=cur&&(cur.status==='confirmed'||cur.status==='predicted'||cur.status==='last11');
+  if(kind==='fixture'){ if(mins<-300)return; if(mins>150&&usable)return; }
+  else if(Math.abs(mins)>2880)return}
  _liveBusy[key]=true; _liveTs[key]=Date.now();
  const dateList=ko?[-1,0,1].map(delta=>new Date(ko.getTime()+delta*864e5)):[0,1,-1].map(delta=>new Date(Date.now()+delta*864e5));
  try{
@@ -190,6 +254,9 @@ async function liveLineupCheck(hn,an,dateStr,scoreStr,kind,force){
    LINEUPS[key]={status:status,lineup_type:typ,home:home,away:away,fotmob_home:(best.home||{}).name||'',fotmob_away:(best.away||{}).name||'',checked_at:new Date().toLocaleString('tr-TR'),source:'FotMob (canlı kontrol)'};
   }
  }catch(e){}
+ if(!LINEUPS[key]||!['confirmed','predicted','last11'].includes(LINEUPS[key].status)){try{await fsLineupCheck(hn,an,dateStr,scoreStr,kind)}catch(e){}}
+ if(!LINEUPS[key]||!['confirmed','predicted','last11'].includes(LINEUPS[key].status)){try{await espnLineupCheck(hn,an,dateStr,scoreStr,kind)}catch(e){}}
+ else persistLineups();
  _liveDone.add(key); delete _liveBusy[key];
  const _rec=LINEUPS[key];
  clearTimeout(_liveTimers[key]);
@@ -430,6 +497,17 @@ function deepPlayerHTML(hn,an,pr,lu){const TH=PLAYERS[slug+'|'+hn]||SQUADS[slug+
  +crow('En iyi oyuncu',H?pl(H.topRated):'-',A?pl(A.topRated):'-')+crow('En golcu',H?pl(H.topScorer):'-',A?pl(A.topScorer):'-')+crow('En cok asist',H?pl(H.topAssist):'-',A?pl(A.topAssist):'-')+crow('Sakat sayisi',H?H.inj.length:'-',A?A.inj.length:'-')+crow('Onemli sakat',H?H.keyInj.length:'-',A?A.keyInj.length:'-')+'</table></div>'
  +'<div class="grid">'+side(hn,H,lu?lu.home:null)+side(an,A,lu?lu.away:null)+'</div>'+adj}
 
+function derivedXI(team){let best=null,bt=-1;
+ for(const k in LINEUPS){const p=k.split('|');let side=null;if(p[1]===team)side=LINEUPS[k].home;else if(p[2]===team)side=LINEUPS[k].away;else continue;
+  if(!side||!side.xi||side.xi.length<11)continue;
+  const ca=String(LINEUPS[k].checked_at||'');const m=ca.match(/(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  const t=m?(+m[3])*1e8+(+m[2])*1e6+(+m[1])*1e4+(+(m[4]||0))*100+(+(m[5]||0)):0;
+  if(t>=bt){bt=t;best=side}}
+ return best}
+function squadXI(team){const T=getSquad(slug,team);if(!T)return null;const ss=squadStrength(T);
+ if(!ss||!ss.xi||ss.xi.length<8)return null;
+ return {formation:'',xi:ss.xi.map(p=>({no:p.no||'',name:p.n,pos:p.pos,rating:p.r,value:p.val,age:p.age})),subs:[]}}
+
 // ---- DERIN ANALIZ v2 (skor matrisi, tum pazarlar, form, H2H, deger) ----
 // Kalibrasyon: 15.910 maclik "onceki maclarla" geri teste dayanir (leakage yok).
 // 1X2 favorisinin isabeti: %30-40 bandi %40, %40-50 %40, %50-60 %46, %60-70 %52, %70+ %61
@@ -537,15 +615,18 @@ window.computeOdds=()=>{const c=window._curProbs;if(!c)return;const g=id=>{const
 
 window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,scoreStr,kind];const pr=predictMatch(hn,an),key=slug+'|'+hn+'|'+an,lu=LINEUPS[key];
  const bar=(t,v)=>pr?`<div class="bar-row"><div class="lab"><span>${t}</span><b>%${(v*100).toFixed(1)}</b></div><div class="prob"><i style="width:${(v*100).toFixed(1)}%"></i></div></div>`:'';
- let lup='';
+ let lup=''; let luUse=lu;
  if(lu&&(lu.status==='confirmed'||lu.status==='predicted'||lu.status==='last11')){
    const badge=lu.status==='confirmed'?'<span style="color:#7ee2a8;font-weight:800">✅ RESMİ İLK 11</span>':lu.status==='predicted'?'<span style="color:#ffd43b;font-weight:800">⚠️ TAHMİNİ 11 (resmi kadro henüz açıklanmadı)</span>':'<span style="color:#ffd43b;font-weight:800">ℹ️ SON MAÇIN 11\'İ (bu maçın resmi kadrosu değil)</span>';
    lup=`<h3>👕 İlk 11'ler ${badge}</h3><p class="note">Kaynak: ${lu.source||'FotMob'} • Kontrol: ${lu.checked_at||''} • Diziliş: ${lu.home.formation||'?'} - ${lu.away.formation||'?'}</p><div class="grid">${lineupHTML(hn,lu.home)}${lineupHTML(an,lu.away)}</div>`;
  }else{
+   const dxH=derivedXI(hn)||squadXI(hn),dxA=derivedXI(an)||squadXI(an);
+   if(dxH&&dxA){luUse={status:'derived',home:dxH,away:dxA};lup=`<h3>👕 Muhtemel 11'ler <span style="color:#ffd43b;font-weight:800">ℹ️ SON MAÇ 11'LERİNDEN DERLENDİ</span></h3><p class="note">Bu maçın resmi/tahmini kadrosu FotMob'da henüz yayınlanmadı (üst liglerde resmi kadro genelde maçtan ~1 saat önce çıkar). Aşağıda her takımın <b>oynadığı son maçtaki gerçek 11'i</b> gösteriliyor; oyuncu gücü analizi bunlar üzerinden yapılır. Resmi kadro yayınlanınca bu bölüm kendiliğinden güncellenir (ekran açıkken 60 sn'de bir kontrol edilir).</p><div class="grid">${lineupHTML(hn,dxH)}${lineupHTML(an,dxA)}</div>`;}else{
    lup=`<h3>👕 İlk 11'ler</h3><div class="box" style="background:#2a2113;border-color:#6b5518">⏳ <b>İlk 11 henüz açıklanmadı.</b><p class="note">Resmi kadrolar genelde maçtan <b>60-45 dakika önce</b>, bazı liglerde <b>30 dakika kala</b> belli olur. Sistem maçtan <b>90 dakika kala</b> kontrol etmeye başlar ve her 15 dakikada bir yeniler; kadro açıklandığında burada <b style="color:#7ee2a8">✅ RESMİ İLK 11</b> olarak görünür (45-30 dk kala tekrar bak). Kadro soccerstats'ta olmadığından <b>FotMob</b>'dan alınır. Açıklanana kadar aşağıda tahmini güç karşılaştırmasını inceleyebilirsin.${lu&&lu.checked_at?'<br>Son kontrol: '+lu.checked_at+' ('+(lu.source||'FotMob')+')':''}</p><button class="chip" onclick="liveLineupCheck('${esc(hn)}','${esc(an)}','${esc(dateStr)}','${esc(scoreStr)}','${kind}',true)">📡 Şimdi Canlı Kontrol Et (FotMob)</button> <button class="chip" onclick="loadLineups().then(()=>openAnalysis('${esc(hn)}','${esc(an)}','${esc(dateStr)}','${esc(scoreStr)}','${kind}'))">🔄 Kayıtlı Veriyi Yenile</button><p class="note">⏱ Bu ekran açıkken kadro <b>her 60 saniyede</b> otomatik kontrol edilir; yayınlandığı anda ekran kendiliğinden yenilenir. Ekranı kapatıp yarım saat kala tekrar açsan da yeniden denenir.</p></div>`;
+   }
  }
- const pwr=(lu&&(lu.status==='confirmed'||lu.status==='predicted'||lu.status==='last11'))?playerPowerHTML(hn,an,lu):'';
- const deep=deepPlayerHTML(hn,an,pr,lu&&lu.status!=='none'?lu:null);
+ const pwr=(luUse&&(luUse.status==='confirmed'||luUse.status==='predicted'||luUse.status==='last11'||luUse.status==='derived'))?playerPowerHTML(hn,an,luUse):'';
+ const deep=deepPlayerHTML(hn,an,pr,luUse&&luUse.status!=='none'?luUse:null);
  const integ=pr?integratedPredict(hn,an,pr):null;
  const sqp=squadPowerHTML(hn,an,integ);
  const fq=integ?integ.q:pr;
