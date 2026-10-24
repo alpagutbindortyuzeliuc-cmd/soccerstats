@@ -147,7 +147,7 @@ function renderMatches(){const list=mseg==='played'?(D.P[slug]||[]):(D.X[slug]||
  $('matchList').innerHTML=`<h3>${lg()[1]} — ${mseg==='played'?'Son Sonuçlar':'Gelecek Maçlar'}</h3>`+(list.map(x=>`<div class="match"><span class="date">${x[0]}</span><span class="tm r">${x[1]}</span><span class="score ${mseg==='played'?'':'fix'}">${x[2]}</span><span class="tm">${x[3]}</span>${x[4]?`<span class="date">İY ${x[4]}</span>`:''}<button class="chip" style="flex:none" onclick="openAnalysis('${esc(x[1])}','${esc(x[3])}','${esc(x[0])}','${esc(x[2])}','${mseg}')">🔍 Analiz</button></div>`).join('')||'<p class="note">Veri yok</p>')}
 document.querySelectorAll('#matchSeg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#matchSeg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mseg=b.dataset.m;renderMatches()});
 // ---- ANALIZ + ILK 11 ----
-let LINEUPS=D.L||{}, PLAYERS={}, SQUADS=D.SQ||{}, FSQ={}, FSL={}, curAnalysis=null;
+let LINEUPS=D.L||{}, PLAYERS={}, SQUADS=D.SQ||{}, curAnalysis=null;
 function _luNorm(x){return String(x||'').replace(/\b[a-zA-Z]\./g,' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(fc|fk|sk|sc|ac|cf|club|if|ff)\b/g,'').replace(/[^a-z0-9]/g,'')}
 let _luIdx=null,_luIdxN=0;
 function luFind(key){try{const c=LINEUPS[key];if(c)return c;
@@ -159,10 +159,7 @@ const RB=(()=>{const v=localStorage.getItem('ss_remote')||'';return v?v.replace(
 async function loadLineups(){if(!location.protocol.startsWith('http')&&!RB)return;
  try{const r=await fetch(RB+'lineups.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();LINEUPS=j.matches||LINEUPS}}catch(e){}
  try{const r=await fetch(RB+'players.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();PLAYERS=j.teams||PLAYERS}}catch(e){}
- try{const r=await fetch(RB+'squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();SQUADS=j.teams||SQUADS}}catch(e){}
- try{const r=await fetch(RB+'fs_squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();FSQ=j.teams||FSQ}}catch(e){}
- try{const r=await fetch(RB+'fs_lineups.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();FSL=j.matches||FSL;
-   for(const k in FSL){if(!LINEUPS[k]||!['confirmed','predicted','last11'].includes((LINEUPS[k]||{}).status))LINEUPS[k]=FSL[k]}}}catch(e){} try{const _lx=JSON.parse(localStorage.getItem('ss_lineups_extra')||'{}');for(const k in _lx){if(!LINEUPS[k])LINEUPS[k]=_lx[k]}}catch(e){}}
+ try{const r=await fetch(RB+'squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();SQUADS=j.teams||SQUADS}}catch(e){} try{const _lx=JSON.parse(localStorage.getItem('ss_lineups_extra')||'{}');for(const k in _lx){if(!LINEUPS[k])LINEUPS[k]=_lx[k]}}catch(e){}}
 loadLineups();
 // ---- CANLI KADRO KONTROLU (FotMob, dogrudan tarayicidan) ----
 const FM_POS={0:'KL',1:'DEF',2:'ORT',3:'FOR'};
@@ -367,7 +364,7 @@ function lineupHTML(teamName,side){const xi=(side.xi||[]).map(p=>`<div class="ma
  return `<div><h4>${teamName} ${side.formation?'('+side.formation+')':''}</h4>${xi||'<p class="note">-</p>'}${subs?`<details><summary class="note">Yedekler</summary><p class="note">${subs}</p></details>`:''}</div>`}
 
 // ---- TAKIM KADROSU ----
-function getSquad(s,t){return SQUADS[s+'|'+t]||PLAYERS[s+'|'+t]||FSQ[s+'|'+t]||null}
+function getSquad(s,t){return SQUADS[s+'|'+t]||PLAYERS[s+'|'+t]||null}
 function squadHTML(t){const T=getSquad(slug,t);
  if(!T||!T.squad||!T.squad.length){
   const ent=Object.entries(LINEUPS).find(([k,v])=>{const p=k.split('|');return p[1]===t||p[2]===t});
@@ -379,8 +376,8 @@ function squadHTML(t){const T=getSquad(slug,t);
  const totV=sq.reduce((a,p)=>a+(+p.val||0),0);
  const labels={KL:'🧤 Kaleciler',DEF:'🛡️ Defans',ORT:'🎯 Orta Saha',FOR:'⚡ Forvet'};
  const groups=['KL','DEF','ORT','FOR'].map(u=>{const g=sq.filter(p=>p.pos===u).sort((a,b)=>(+b.r||0)-(+a.r||0));if(!g.length)return '';
-  return '<h4>'+labels[u]+' ('+g.length+')</h4>'+g.map(p=>'<div class="match"><span class="date">'+(p.no||'')+'</span><span class="tm">'+p.n+(p.age?' <span style="color:var(--mut);font-weight:400">('+p.age+')</span>':'')+(p.inj?' <span style="color:#ff9a9a">🚑 '+p.inj+'</span>':'')+'</span>'+(p.r?'<span class="date">'+(T.source==='FlashScore'?'⭐':'⭐')+(+p.r).toFixed(2)+'</span>':'')+'<span class="date">'+(p.g||0)+'G '+(p.a||0)+'A</span>'+(p.mp?'<span class="date">'+p.mp+'M '+(p.min||0)+"'</span>":'')+(p.val?'<span class="date">'+fmtVal(p.val)+'</span>':'')+'</div>').join('')}).join('');
- return '<h3>👥 Kadro ('+sq.length+' oyuncu)</h3>'+(T.derived?'<p class="note">📋 '+T.derived+'</p>':'')+'<p class="note">'+(T.coach?'Teknik direktör: <b>'+T.coach+'</b> • ':'')+'Ort. reyting: <b>'+avgR+'</b> • Kadro değeri: <b>'+fmtVal(totV)+'</b> • Sakat: <b>'+inj.length+'</b>'+(inj.length?' ('+inj.map(p=>p.n).join(', ')+')':'')+'<br>Kaynak: '+(T.source==='FlashScore'?'<b>FlashScore</b>':'FotMob ('+(T.fotmob||t)+')')+(T.source==='FlashScore'?' • ⭐ = maç/dakika/gol-asist üzerinden hesaplanan güç puanı • M = maç, \' = dakika':' • ⭐ sezon reytingi')+', G/A = gol/asist</p>'+groups}
+  return '<h4>'+labels[u]+' ('+g.length+')</h4>'+g.map(p=>'<div class="match"><span class="date">'+(p.no||'')+'</span><span class="tm">'+p.n+(p.age?' <span style="color:var(--mut);font-weight:400">('+p.age+')</span>':'')+(p.inj?' <span style="color:#ff9a9a">🚑 '+p.inj+'</span>':'')+'</span>'+(p.r?'<span class="date">⭐'+(+p.r).toFixed(2)+'</span>':'')+'<span class="date">'+(p.g||0)+'G '+(p.a||0)+'A</span>'+(p.val?'<span class="date">'+fmtVal(p.val)+'</span>':'')+'</div>').join('')}).join('');
+ return '<h3>👥 Kadro ('+sq.length+' oyuncu)</h3>'+(T.derived?'<p class="note">📋 '+T.derived+'</p>':'')+'<p class="note">'+(T.coach?'Teknik direktör: <b>'+T.coach+'</b> • ':'')+'Ort. reyting: <b>'+avgR+'</b> • Kadro değeri: <b>'+fmtVal(totV)+'</b> • Sakat: <b>'+inj.length+'</b>'+(inj.length?' ('+inj.map(p=>p.n).join(', ')+')':'')+'<br>Kaynak: FotMob ('+(T.fotmob||t)+') • ⭐ sezon reytingi, G/A = gol/asist</p>'+groups}
 
 // ---- OYUNCU GUCU ----
 function fmtVal(v){if(!v)return '-';if(v>=1e6)return '€'+(v/1e6).toFixed(1)+'Mn';if(v>=1e3)return '€'+Math.round(v/1e3)+'B';return '€'+v}
@@ -497,7 +494,7 @@ function teamDeep(T,luSide){if(!T)return null;const sq=T.squad||[];const rated=s
  const defShare=defs.length?Math.min(0.6,defUnav.reduce((a,p)=>a+(+p.r||6.3),0)/Math.max(1,defs.reduce((a,p)=>a+(+p.r||6.3),0))):0;
  const units={};['KL','DEF','ORT','FOR'].forEach(u=>{const g=rated.filter(p=>p.pos===u);units[u]=g.length?g.reduce((a,p)=>a+(+p.r),0)/g.length:null});
  return {sq,rated,byR,byC,byG,byA,byCard,totG,totGA,inj,keyInj,unav,goalShare,defShare,units,topRated:byR[0],topScorer:byG[0],topContrib:byC[0],topAssist:byA[0],topCard:byCard[0]}}
-function deepPlayerHTML(hn,an,pr,lu){const TH=PLAYERS[slug+'|'+hn]||SQUADS[slug+'|'+hn]||FSQ[slug+'|'+hn],TA=PLAYERS[slug+'|'+an]||SQUADS[slug+'|'+an]||FSQ[slug+'|'+an];
+function deepPlayerHTML(hn,an,pr,lu){const TH=PLAYERS[slug+'|'+hn]||SQUADS[slug+'|'+hn],TA=PLAYERS[slug+'|'+an]||SQUADS[slug+'|'+an];
  if(!TH&&!TA)return '<h3>🧬 Derin Oyuncu Analizi</h3><div class="box">Oyuncu istatistikleri bu mac icin henuz cekilmedi. Mac yaklastiginda (son 48 saat) kadro, sakat ve sezon istatistikleri otomatik gelir; sayfayi yenileyip tekrar dene.</div>';
  const H=teamDeep(TH,lu?lu.home:null),A=teamDeep(TA,lu?lu.away:null);const fx=(v,d)=>v==null||isNaN(v)?'-':(+v).toFixed(d??2);
  const crow=(lab,hv,av)=>'<tr><td><b>'+(hv??'-')+'</b></td><td style="color:var(--mut)">'+lab+'</td><td><b>'+(av??'-')+'</b></td></tr>';
