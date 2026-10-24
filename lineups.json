@@ -1,5 +1,5 @@
 {
- "generated_at": "19.10.2026 02:46 UTC",
+ "generated_at": "24.10.2026 20:06 UTC",
  "matches": {
   "southkorea4|Hwacheon W|Sejong W": {
    "status": "not_found",
@@ -250287,6 +250287,361 @@
    "fotmob_home": "Deportivo Marquense",
    "fotmob_away": "CD Suchitepéquez",
    "checked_at": "19.10.2026 02:46",
+   "source": "FotMob"
+  },
+  "england8|Everton U21|Wolverhampton Wanderers U21": {
+   "status": "last11",
+   "lineup_type": "lastStarting11",
+   "home": {
+    "formation": "4-2-3-1",
+    "xi": [
+     {
+      "no": "1",
+      "name": "George Pickford",
+      "pos": "KL",
+      "rating": 7.31,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "2",
+      "name": "George Finney",
+      "pos": "DEF",
+      "rating": 7.2,
+      "age": 19,
+      "value": 190080
+     },
+     {
+      "no": "4",
+      "name": "Luis Gardner",
+      "pos": "DEF",
+      "rating": 6.99,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "5",
+      "name": "John Dodds",
+      "pos": "DEF",
+      "rating": 7.19,
+      "age": 17,
+      "value": null
+     },
+     {
+      "no": "3",
+      "name": "Ezra Carrington",
+      "pos": "DEF",
+      "rating": 7.55,
+      "age": 20,
+      "value": null
+     },
+     {
+      "no": "8",
+      "name": "Melvin Matos",
+      "pos": "ORT",
+      "rating": 7.17,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "6",
+      "name": "Jack Patterson",
+      "pos": "ORT",
+      "rating": 7.54,
+      "age": 21,
+      "value": 244010
+     },
+     {
+      "no": "7",
+      "name": "Jonathan Nsangou",
+      "pos": "FOR",
+      "rating": 7.04,
+      "age": 16,
+      "value": null
+     },
+     {
+      "no": "10",
+      "name": "Malik Olayiwola",
+      "pos": "ORT",
+      "rating": 6.74,
+      "age": 17,
+      "value": null
+     },
+     {
+      "no": "11",
+      "name": "Braiden Graham",
+      "pos": "FOR",
+      "rating": 7.87,
+      "age": 18,
+      "value": 500866
+     },
+     {
+      "no": "9",
+      "name": "Ceiran Loney",
+      "pos": "FOR",
+      "rating": 6.5,
+      "age": 18,
+      "value": null
+     }
+    ],
+    "subs": [
+     {
+      "no": "12",
+      "name": "Fraser Barnsley",
+      "pos": "KL",
+      "rating": null,
+      "age": 22,
+      "value": null
+     },
+     {
+      "no": "14",
+      "name": "Joshua van Schoor",
+      "pos": "DEF",
+      "rating": 6.52,
+      "age": 20,
+      "value": null
+     },
+     {
+      "no": "15",
+      "name": "Francis Gomez",
+      "pos": "ORT",
+      "rating": 5.97,
+      "age": 20,
+      "value": null
+     },
+     {
+      "no": "16",
+      "name": "Callum Bates",
+      "pos": "ORT",
+      "rating": 5.78,
+      "age": 21,
+      "value": null
+     },
+     {
+      "no": "19",
+      "name": "Justin Clarke",
+      "pos": "FOR",
+      "rating": 6.13,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "17",
+      "name": "Shea Pita",
+      "pos": "FOR",
+      "rating": 6.17,
+      "age": 17,
+      "value": null
+     },
+     {
+      "no": "18",
+      "name": "Omari Benjamin",
+      "pos": "FOR",
+      "rating": 6.02,
+      "age": 20,
+      "value": null
+     }
+    ]
+   },
+   "away": {
+    "formation": "4-2-3-1",
+    "xi": [
+     {
+      "no": "1",
+      "name": "Josh Gracey",
+      "pos": "KL",
+      "rating": 6.88,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "2",
+      "name": "Wesley Okoduwa",
+      "pos": "DEF",
+      "rating": 6.47,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "5",
+      "name": "Temple Ojinnaka",
+      "pos": "DEF",
+      "rating": 6.34,
+      "age": 21,
+      "value": 259444
+     },
+     {
+      "no": "4",
+      "name": "Sebastian Lochhead",
+      "pos": "DEF",
+      "rating": 6.46,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "3",
+      "name": "Alfie White",
+      "pos": "DEF",
+      "rating": 6.11,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "8",
+      "name": "Luke Rawlings",
+      "pos": "ORT",
+      "rating": 7.01,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "6",
+      "name": "Makenzie Bradbury",
+      "pos": "ORT",
+      "rating": 6.9,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "7",
+      "name": "Enso González",
+      "pos": "FOR",
+      "rating": 6.84,
+      "age": 21,
+      "value": null
+     },
+     {
+      "no": "10",
+      "name": "Xu Bin",
+      "pos": "ORT",
+      "rating": 6.79,
+      "age": 22,
+      "value": null
+     },
+     {
+      "no": "11",
+      "name": "Tom Edozie",
+      "pos": "FOR",
+      "rating": 6.67,
+      "age": 20,
+      "value": 322362
+     },
+     {
+      "no": "9",
+      "name": "Dani Ángel",
+      "pos": "FOR",
+      "rating": 5.98,
+      "age": 20,
+      "value": null
+     }
+    ],
+    "subs": [
+     {
+      "no": "13",
+      "name": "Alfie Arnold",
+      "pos": "KL",
+      "rating": 4.41,
+      "age": 17,
+      "value": null
+     },
+     {
+      "no": "12",
+      "name": "Myles Dayman",
+      "pos": "DEF",
+      "rating": 5.73,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "15",
+      "name": "Saheed Olagunju",
+      "pos": "DEF",
+      "rating": 6.07,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "16",
+      "name": "Luke O'Donnell",
+      "pos": "ORT",
+      "rating": 6.49,
+      "age": 19,
+      "value": null
+     },
+     {
+      "no": "14",
+      "name": "Fin Ashworth",
+      "pos": "ORT",
+      "rating": 6.02,
+      "age": 21,
+      "value": null
+     },
+     {
+      "no": "18",
+      "name": "Emilio Ballard-Matthews",
+      "pos": "FOR",
+      "rating": 5.81,
+      "age": 18,
+      "value": null
+     },
+     {
+      "no": "17",
+      "name": "Ji Min-Kyu",
+      "pos": "FOR",
+      "rating": 6.16,
+      "age": 19,
+      "value": null
+     }
+    ]
+   },
+   "kickoff": "2026-10-23 21:00",
+   "date": "Fri 23 Oct",
+   "time": "21:00",
+   "fotmob_home": "Everton U21",
+   "fotmob_away": "Wolverhampton Wanderers U21",
+   "checked_at": "24.10.2026 20:06",
+   "source": "FotMob"
+  },
+  "england5|Gateshead FC|Tamworth": {
+   "status": "none",
+   "lineup_type": "",
+   "home": {
+    "formation": "",
+    "xi": [],
+    "subs": []
+   },
+   "away": {
+    "formation": "",
+    "xi": [],
+    "subs": []
+   },
+   "kickoff": "2026-10-23 21:45",
+   "date": "Fri 23 Oct",
+   "time": "21:45",
+   "fotmob_home": "Gateshead FC",
+   "fotmob_away": "Tamworth",
+   "checked_at": "24.10.2026 20:06",
+   "source": "FotMob"
+  },
+  "wales|Holywell Town|Penybont": {
+   "status": "none",
+   "lineup_type": "",
+   "home": {
+    "formation": "",
+    "xi": [],
+    "subs": []
+   },
+   "away": {
+    "formation": "",
+    "xi": [],
+    "subs": []
+   },
+   "kickoff": "2026-10-23 21:45",
+   "date": "Fri 23 Oct",
+   "time": "21:45",
+   "fotmob_home": "Holywell Town",
+   "fotmob_away": "Penybont",
+   "checked_at": "24.10.2026 20:06",
    "source": "FotMob"
   }
  }
