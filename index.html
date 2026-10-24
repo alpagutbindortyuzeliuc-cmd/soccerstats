@@ -44,6 +44,7 @@ nav.bottom button{flex:1;background:none;border:0;color:var(--mut);padding:9px 2
 <!-- ============ KESFET ============ -->
 <section id="view-home">
  <div class="cards" id="statCards"></div>
+ <div id="bankoBox"></div>
  <div class="favrow"><input id="leagueSearch" type="search" placeholder="🔎 Lig ara: Süper Lig, Premier League, Bundesliga..."><button class="chip" id="favOnly">⭐ Favoriler</button></div>
  <div class="seg" id="quickSeg"><button data-q="" class="on">Tümü</button><button data-q="Turkiye">🇹🇷 Türkiye</button><button data-q="England">İngiltere</button><button data-q="Spain">İspanya</button><button data-q="Germany">Almanya</button><button data-q="Italy">İtalya</button><button data-q="France">Fransa</button></div>
  <div class="lgrid" id="leagueGrid"></div>
@@ -107,6 +108,7 @@ function renderHome(){
  <div class="row"><span>⚽ ${l[3]||'-'} maç</span><span>Gol ort: <b style="color:#7ee2a8">${l[4]||'-'}</b></span><span>Sezon %${l[10]||'-'}</span></div>
  <div class="row"><span>2.5 Üst ${l[5]||'-'}</span></div>${bar(l[5])}<div class="row"><span>KG Var ${l[6]||'-'}</span></div>${bar(l[6])}</div>`).join('')||'<p class="note">Sonuç yok.</p>';
  document.querySelectorAll('.lcard').forEach(c=>c.onclick=e=>{if(e.target.dataset.star)return;slug=c.dataset.slug;syncSelects();renderAll();go('league')});
+ renderBanko();
  document.querySelectorAll('[data-star]').forEach(b=>b.onclick=e=>{e.stopPropagation();const s=b.dataset.star;favs.has(s)?favs.delete(s):favs.add(s);saveFavs();renderHome()});
 }
 $('leagueSearch').oninput=renderHome;$('favOnly').onclick=()=>{favOnly=!favOnly;$('favOnly').classList.toggle('on',favOnly);renderHome()};
@@ -414,6 +416,17 @@ function squadStrength(T){if(!T||!T.squad||!T.squad.length)return null;const sq=
   inj:sq.filter(p=>p.inj),top:[...rated].sort((a,b)=>b.r-a.r).slice(0,3),
   xiText:xi.map(p=>p.pos+' '+p.n+(p.r?' ('+(+p.r).toFixed(2)+')':'')).join(', ')}}
 function last5Of(tm){const arr=(D.P[slug]||[]).filter(x=>x[1]===tm||x[3]===tm).slice(0,5);let w=0,d=0,l=0,gf=0,ga=0;arr.forEach(x=>{const s=String(x[2]||'').split(':').map(Number);if(s.length<2||isNaN(s[0]))return;const h=x[1]===tm,g1=h?s[0]:s[1],g2=h?s[1]:s[0];gf+=g1;ga+=g2;if(g1>g2)w++;else if(g1<g2)l++;else d++});return {n:arr.length,ppg:arr.length?(w*3+d)/arr.length:0,gf,ga}}
+function last5Detail(tm){const arr=(D.P[slug]||[]).filter(x=>x[1]===tm||x[3]===tm).slice(0,5);
+ return arr.map(x=>{const s=String(x[2]||'').split(':').map(Number);const h=x[1]===tm;
+  const ok=s.length>1&&!isNaN(s[0]);const gf=ok?(h?s[0]:s[1]):0,ga=ok?(h?s[1]:s[0]):0;const opp=h?x[3]:x[1];
+  const om=(D.M[slug]||{})[opp]||{};const orow=(D.S[slug]||[]).find(r=>r[1]===opp);
+  return {opp:opp,line:x[1]+' '+x[2]+' '+x[3],date:x[0],res:gf>ga?'G':(gf<ga?'M':'B'),gf:gf,ga:ga,oppPPG:+om.PPG||0,oppRank:orow?orow[0]:'-'}})}
+function formQuality(tm){const L=last5Detail(tm);if(!L.length)return null;
+ const teams=Object.values(D.M[slug]||{});const lgAvg=teams.length?teams.reduce((a,t)=>a+(+t.PPG||0),0)/teams.length:1.35;
+ const pts=L.reduce((a,m)=>a+(m.res==='G'?3:(m.res==='B'?1:0)),0);const ppg=pts/L.length;
+ const oppAvg=L.reduce((a,m)=>a+(m.oppPPG||lgAvg),0)/L.length;
+ return {n:L.length,ppg:ppg,oppAvg:oppAvg,lgAvg:lgAvg,fq:ppg+0.4*(oppAvg-lgAvg),gf:L.reduce((a,m)=>a+m.gf,0),ga:L.reduce((a,m)=>a+m.ga,0),list:L}}
+
 function integratedPredict(hn,an,pr,luObj){if(!pr)return null;const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
  const SH=squadStrength(getSquad(slug,hn)),SA=squadStrength(getSquad(slug,an));
  const DH=teamDeep(getSquad(slug,hn),null),DA=teamDeep(getSquad(slug,an),null);
@@ -424,7 +437,9 @@ function integratedPredict(hn,an,pr,luObj){if(!pr)return null;const clamp=(v,lo,
  else if(!SH||!SA){missing.push('Kadro verisi eksik: '+(!SH?hn:'')+(!SH&&!SA?' ve ':'')+(!SA?an:''))}
  if(SH&&SA&&SH.bestXI&&SA.bestXI&&SH.xiVal>0&&SA.xiVal>0){const f=clamp(Math.exp(0.06*Math.log(SH.xiVal/SA.xiVal)),0.94,1.06);fH*=f;fA/=f;rows.push({lab:'Kadro değeri (ilk 11: '+fmtVal(SH.xiVal)+' vs '+fmtVal(SA.xiVal)+')',fh:f,fa:1/f,side:SH.xiVal>SA.xiVal?1:2})}
  if(SH&&SA&&SH.depth&&SA.depth&&Math.abs(SH.depth-SA.depth)>=0.15){const f=clamp(1+0.10*(SH.depth-SA.depth),0.97,1.03);fH*=f;fA/=f;rows.push({lab:'Kadro derinliği / yedek kalitesi ('+SH.depth.toFixed(2)+' vs '+SA.depth.toFixed(2)+')',fh:f,fa:1/f,side:SH.depth>SA.depth?1:2})}
- if(FH.n&&FA.n){const f=clamp(1+0.045*(FH.ppg-FA.ppg),0.93,1.07);fH*=f;fA/=f;rows.push({lab:'Form — son 5 maç ('+hn+' '+FH.ppg.toFixed(2)+' puan/maç, '+an+' '+FA.ppg.toFixed(2)+')',fh:f,fa:1/f,side:FH.ppg>FA.ppg?1:2})}
+ const FQH=formQuality(hn),FQA=formQuality(an);
+ if(FQH&&FQA){const f=clamp(1+0.055*(FQH.fq-FQA.fq),0.92,1.08);fH*=f;fA/=f;rows.push({lab:'Son 5 maç formu — rakip gücü dahil ('+hn+': '+FQH.ppg.toFixed(2)+' puan/maç, rakipler ort. '+FQH.oppAvg.toFixed(2)+' PPG, '+FQH.gf+'-'+FQH.ga+' gol; '+an+': '+FQA.ppg.toFixed(2)+', rakipler '+FQA.oppAvg.toFixed(2)+' PPG, '+FQA.gf+'-'+FQA.ga+' gol)',fh:f,fa:1/f,side:FQH.fq>FQA.fq?1:2})}
+ else if(FH.n&&FA.n){const f=clamp(1+0.045*(FH.ppg-FA.ppg),0.93,1.07);fH*=f;fA/=f;rows.push({lab:'Form — son 5 maç ('+hn+' '+FH.ppg.toFixed(2)+' puan/maç, '+an+' '+FA.ppg.toFixed(2)+')',fh:f,fa:1/f,side:FH.ppg>FA.ppg?1:2})}
  if(DH&&(DH.goalShare>0.02||DH.defShare>0.02)){const a1=1-0.6*DH.goalShare,a2=1+0.35*DH.defShare;fH*=a1;fA*=a2;rows.push({lab:'🏥 '+hn+' eksikleri (gol katkısı kaybı %'+Math.round(DH.goalShare*100)+', savunma kaybı %'+Math.round(DH.defShare*100)+')',fh:a1,fa:a2,side:2})}
  if(DA&&(DA.goalShare>0.02||DA.defShare>0.02)){const a2=1-0.6*DA.goalShare,a1=1+0.35*DA.defShare;fH*=a1;fA*=a2;rows.push({lab:'🏥 '+an+' eksikleri (gol katkısı kaybı %'+Math.round(DA.goalShare*100)+', savunma kaybı %'+Math.round(DA.defShare*100)+')',fh:a1,fa:a2,side:1})}
  if(luObj&&luObj.home&&luObj.away&&SH&&SA&&SH.bestXI&&SA.bestXI){
@@ -619,6 +634,62 @@ window.computeOdds=()=>{const c=window._curProbs;if(!c)return;const g=id=>{const
   const y=edge>=0.08?'✅ Değerli':(edge>=0.02?'🟡 Sınırda değerli':(edge>=-0.03?'⚪ Adile yakın':'❌ Değer yok'));
   return '<tr><td style="text-align:left">'+r[0]+'</td><td>'+(1/r[1]).toFixed(2)+'</td><td>'+r[2].toFixed(2)+'</td><td>'+(edge>=0?'+':'')+(edge*100).toFixed(1)+'%</td><td>%'+(kelly*100).toFixed(1)+'</td><td>'+y+'</td></tr>'}).join('')+'</table></div><p class="note">Kelly: matematiksel üst sınırdır; pratikte bunun yarısı/çeyreği daha güvenlidir. Kenar pozitif olsa bile tek maç her zaman kaybedebilir.</p>'};
 
+// ---- GUNUN 3 BANKO MACI ----
+let _bankoData=null;
+function bankoCompute(){
+ const now=Date.now(),savedSlug=slug,cand=[];
+ for(const lgd of D.leagues){slug=lgd[0];
+  for(const fx of (D.X[slug]||[])){const ko=kickoffDate(fx[0],fx[2]);if(!ko)continue;const hrs=(ko-now)/36e5;if(hrs<-1||hrs>40)continue;
+   const pr=predictMatch(fx[1],fx[3]);if(!pr)continue;
+   const best0=Math.max(pr.o15,pr.o25,pr.bt,pr.p1,pr.p2);if(best0<0.70)continue;
+   cand.push({slug:slug,hn:fx[1],an:fx[3],date:fx[0],time:fx[2],ko:ko,best0:best0})}}
+ cand.sort((a,b)=>b.best0-a.best0);
+ const scored=[];
+ for(const c of cand.slice(0,14)){slug=c.slug;const pr=predictMatch(c.hn,c.an);if(!pr)continue;
+  const integ=integratedPredict(c.hn,c.an,pr,null);if(!integ)continue;
+  const key=c.slug+'|'+c.hn+'|'+c.an,lu=LINEUPS[key];
+  const luB=lu?(lu.status==='confirmed'?1.03:(lu.status==='predicted'?1.01:(lu.status==='last11'?1.0:0.97))):0.97;
+  const mH=(D.M[c.slug]||{})[c.hn]||{},mA=(D.M[c.slug]||{})[c.an]||{};
+  const rH=(D.S[c.slug]||[]).find(r=>r[1]===c.hn),rA=(D.S[c.slug]||[]).find(r=>r[1]===c.an);
+  scored.push({slug:c.slug,hn:c.hn,an:c.an,date:c.date,time:c.time,ko:c.ko,integ:integ,lu:lu,
+   score:integ.best[1]*(0.55+0.45*integ.cov/100)*luB,
+   rankH:rH?rH[0]:'-',rankA:rA?rA[0]:'-',ppgH:mH.PPG||'-',ppgA:mA.PPG||'-',
+   attH:mH.attack_strength||'-',defH:mH.defence_strength||'-',attA:mA.attack_strength||'-',defA:mA.defence_strength||'-',
+   fqH:formQuality(c.hn),fqA:formQuality(c.an)})}
+ slug=savedSlug;scored.sort((a,b)=>b.score-a.score);
+ _bankoData={ts:Date.now(),scored:scored}}
+function bankoDayKey(){return new Date().toLocaleDateString('tr-TR')}
+function bankoHidden(){try{return new Set(JSON.parse(localStorage.getItem('ss_banko_off')||'[]').filter(x=>x.startsWith(bankoDayKey()+'|')))}catch(e){return new Set()}}
+window.bankoHide=(s,h,a)=>{const arr=JSON.parse(localStorage.getItem('ss_banko_off')||'[]').filter(x=>x.startsWith(bankoDayKey()+'|'));
+ arr.push(bankoDayKey()+'|'+s+'|'+h+'|'+a);localStorage.setItem('ss_banko_off',JSON.stringify(arr));renderBanko()};
+function renderBanko(){
+ const box=$('bankoBox');if(!box)return;
+ try{
+  if(!_bankoData||Date.now()-_bankoData.ts>900000)bankoCompute();
+  const hid=bankoHidden();
+  const list=_bankoData.scored.filter(c=>!hid.has(bankoDayKey()+'|'+c.slug+'|'+c.hn+'|'+c.an)).slice(0,3);
+  const l5list=fq=>fq?fq.list.map(m=>'<div class="match"><span class="date">'+m.date+'</span><span class="tm">'+m.line+'</span><span class="date">'+m.res+' • Rakip: '+m.opp+' ('+m.oppRank+'.)</span></div>').join(''):'<p class="note">Veri yok</p>';
+  const card=c=>{const ig=c.integ,q=ig.q;const lname=(D.leagues.find(l=>l[0]===c.slug)||[])[1]||c.slug;
+   const when=c.ko?c.ko.toLocaleString('tr-TR',{timeZone:'Europe/Istanbul',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):(c.date+' '+c.time);
+   const lub=c.lu?(c.lu.status==='confirmed'?' ✅ Resmi 11':(c.lu.status==='predicted'?' ⚠️ Tahmini 11':(c.lu.status==='last11'?' ℹ️ Son maç 11i':''))):'';
+   return '<div class="box" style="background:#12281a;border-color:#1f6b3a">'
+   +'<div style="display:flex;justify-content:space-between;gap:8px"><b>🏦 '+c.hn+' - '+c.an+'</b>'
+   +'<button class="chip" title="Bu maçı bugün bir daha gösterme" onclick="bankoHide(\''+c.slug+'\',\''+esc(c.hn)+'\',\''+esc(c.an)+'\')">✕ Sil</button></div>'
+   +'<p class="note">'+lname+' • '+when+lub+'</p>'
+   +'<p>🎯 <b>'+ig.best[0]+'</b> — %'+(ig.best[1]*100).toFixed(1)+' olasılık • Nihai xG: <b>'+ig.lH.toFixed(2)+' - '+ig.lA.toFixed(2)+'</b> • Güven: <b>'+ig.conf+'</b> • Kapsama: %'+ig.cov+'</p>'
+   +'<p class="note">1: %'+(q.p1*100).toFixed(0)+' • X: %'+(q.px*100).toFixed(0)+' • 2: %'+(q.p2*100).toFixed(0)+' • 2.5 Üst: %'+(q.o25*100).toFixed(0)+' • KG Var: %'+(q.bt*100).toFixed(0)+'</p>'
+   +'<div class="tablewrap"><table style="min-width:0"><tr><th></th><th>'+c.hn+'</th><th>'+c.an+'</th></tr>'
+   +'<tr><td style="text-align:left">Lig sırası / Puan ort.</td><td>'+c.rankH+'. / '+c.ppgH+'</td><td>'+c.rankA+'. / '+c.ppgA+'</td></tr>'
+   +'<tr><td style="text-align:left">Hücum / Savunma gücü</td><td>'+c.attH+' / '+c.defH+'</td><td>'+c.attA+' / '+c.defA+'</td></tr>'
+   +(c.fqH&&c.fqA?'<tr><td style="text-align:left">Son 5: puan/maç (rakip gücü)</td><td>'+c.fqH.ppg.toFixed(2)+' (rakip '+c.fqH.oppAvg.toFixed(2)+')</td><td>'+c.fqA.ppg.toFixed(2)+' (rakip '+c.fqA.oppAvg.toFixed(2)+')</td></tr>'
+   +'<tr><td style="text-align:left">Son 5 gol (atılan-yenilen)</td><td>'+c.fqH.gf+'-'+c.fqH.ga+'</td><td>'+c.fqA.gf+'-'+c.fqA.ga+'</td></tr>':'')
+   +'</table></div>'
+   +'<details><summary class="note">Son 5 maçlar (kimlerle oynamışlar?)</summary><div class="grid"><div><h4>'+c.hn+'</h4>'+l5list(c.fqH)+'</div><div><h4>'+c.an+'</h4>'+l5list(c.fqA)+'</div></div></details>'
+   +'<button class="chip" style="margin-top:8px" onclick="signalGo(\''+c.slug+'\',\''+esc(c.hn)+'\',\''+esc(c.an)+'\',\''+esc(c.date)+'\',\''+esc(c.time)+'\')">🔍 Tam Analiz</button></div>'};
+  box.innerHTML='<h3>🏦 Günün Banko Maçları <span class="note">(derin analizle her gün otomatik seçilir)</span></h3>'
+   +(list.length?list.map(card).join(''):'<div class="box"><p class="note">Bugün kriterlere uyan (yüksek olasılık + yeterli veri) maç bulunamadı. Eşik bilerek yüksek tutuldu; banko yoksa zorlama da yok.</p></div>')
+   +'<p class="note">Seçim; son 5 maçın <b>rakip gücü</b> (kimlerle oynadıkları), lig sırası, puan ortalaması, atılan/yenilen gol, kadro gücü ve sakatlar dahil hesaplanır. ✕ Silersen yerine sıradaki aday gelir ve o maçı bugün bir daha göstermez. Banko = yüksek olasılık demek; garanti demek değildir.</p>';
+ }catch(e){box.innerHTML=''}}
 window.openAnalysis=(hn,an,dateStr,scoreStr,kind)=>{curAnalysis=[hn,an,dateStr,scoreStr,kind];const pr=predictMatch(hn,an),key=slug+'|'+hn+'|'+an,lu=LINEUPS[key];
  const bar=(t,v)=>pr?`<div class="bar-row"><div class="lab"><span>${t}</span><b>%${(v*100).toFixed(1)}</b></div><div class="prob"><i style="width:${(v*100).toFixed(1)}%"></i></div></div>`:'';
  let lup=''; let luUse=lu;
