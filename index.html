@@ -39,7 +39,7 @@ nav.bottom button{flex:1;background:none;border:0;color:var(--mut);padding:9px 2
 .hidden{display:none!important}.favrow{display:flex;gap:8px;align-items:center;margin:10px 0}.favrow input{flex:1}
 @media(min-width:760px){.sheet .panel{left:50%;right:auto;transform:translateX(-50%);width:560px;border-radius:20px;bottom:24px}@keyframes up{from{opacity:.5}}}
 </style></head><body>
-<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">129 Lig • Puan • Form • Gol • Tahmin<br>🔄 Son güncelleme: <span id="updAt">25.10.2026 20:08</span></div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
+<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">129 Lig • Puan • Form • Gol • Tahmin<br>🔄 Son güncelleme: <span id="updAt">25.10.2026 22:03</span></div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
 <main>
 <!-- ============ KESFET ============ -->
 <section id="view-home">
@@ -145,6 +145,17 @@ async function refreshLeagueLive(force,s0opt){
   if(!r.ok)throw new Error('HTTP '+r.status);
   const j=await r.json();
   let tbl=(j.table||[{}])[0].data||{};
+  // --- GUVENLIK: cekilen lig gercekten secili lig mi? ---
+  try{
+   const _nrm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+   const _got=_nrm(tbl.leagueName||''), _want=_nrm(((D.leagues||[]).find(l=>l[0]===s0)||[])[1]||'').split(' - ').pop();
+   if(_got&&_want){
+    const _gw=_got.split(' ').filter(w=>w.length>1), _ww=_want.split(' ').filter(w=>w.length>1);
+    const _common=_gw.some(w=>_ww.includes(w));
+    if(!(_got.includes(_want)||_want.includes(_got)||_common))
+     throw new Error('lig uyusmuyor: kaynak "'+tbl.leagueName+'" ≠ beklenen "'+_want+'"');
+   }
+  }catch(e){ if(String(e.message||'').indexOf('uyusmuyor')>=0) throw e; }
   let tables=tbl.table||{};
   if((!tables.all||!tables.all.length)&&tbl.composite&&tbl.tables){const mg={all:[],home:[],away:[],form:[]};
    tbl.tables.forEach(g=>{const t2=g.table||{};['all','home','away','form'].forEach(k=>{mg[k]=mg[k].concat(t2[k]||[])})});
@@ -296,7 +307,14 @@ function autoRefreshIfStale(ms){
  _autoBusy[s0]=1;refreshLeagueLive(false,s0).then(()=>{delete _autoBusy[s0]}).catch(()=>{delete _autoBusy[s0]})
 }
 // kayitli canli veriyi geri yukle
-function loadLeagueLiveCache(){try{const st=JSON.parse(localStorage.getItem('ss_lg_live')||'{}');let n=0;
+function loadLeagueLiveCache(){try{
+ // surum degistiyse eski lig onbellegi gecersiz: bicim uyusmazligi hata firlatip
+ // secili ligi bozabiliyordu (or. secim USA iken Arnavutluk verisi gorunmesi)
+ const _ver=(typeof C!=='undefined'?C:'')||'';
+ if(localStorage.getItem('ss_lg_ver')!==_ver){
+  ['ss_lg_live','ss_lg_ver','ss_data_updated','ss_last_full_update'].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+  localStorage.setItem('ss_lg_ver',_ver);return 0}
+ const st=JSON.parse(localStorage.getItem('ss_lg_live')||'{}');let n=0;
  for(const k in st){const v=st[k];if(!v||!v.S)continue;if(Date.now()-(v.ts||0)>7*864e5)continue;
   D.S[k]=v.S;D.F[k]=v.F;D.M[k]=v.M;D.P[k]=v.P;D.X[k]=v.X;if(v.leagues){D.leagues=v.leagues}_lgTs[k]=v.ts||0;n++}
  return n}catch(e){return 0}}
@@ -304,6 +322,9 @@ try{loadLeagueLiveCache()}catch(e){}
 document.addEventListener('DOMContentLoaded',()=>{const b=$('lgRefreshBtn');if(b)b.onclick=()=>refreshLeagueLive(true)});
 
 function renderLeague(){
+ // emniyet: secili lig gercekten veride varsa devam, yoksa ilk lige don
+ if(!lg().length&&D.leagues.length){slug=D.leagues[0][0]}
+ try{syncSelects()}catch(e){}
  const l=lg();$('leagueInfo').innerHTML=`<div class="box"><h3>${l[1]} <button class="star ${favs.has(slug)?'on':''}" id="favStar">${favs.has(slug)?'★':'☆'}</button></h3><p class="note">Oynanan: ${l[3]||'-'} • Gol/maç: ${l[4]||'-'} • 2.5 Üst: ${l[5]||'-'} • KG Var: ${l[6]||'-'} • Ev sahibi: ${l[7]||'-'} Beraberlik: ${l[8]||'-'} Deplasman: ${l[9]||'-'} • Sezon ilerleme: %${l[10]||'-'}</p></div>`;
  $('favStar').onclick=()=>{favs.has(slug)?favs.delete(slug):favs.add(slug);saveFavs();renderLeague();renderHome()};
  setTimeout(()=>{try{autoRefreshIfStale()}catch(e){}},80);
@@ -851,6 +872,7 @@ window.computeOdds=()=>{const c=window._curProbs;if(!c)return;const g=id=>{const
 let _bankoData=null;
 function bankoCompute(){
  const now=Date.now(),savedSlug=slug,cand=[];
+ try{
  for(const lgd of D.leagues){slug=lgd[0];
   for(const fx of (D.X[slug]||[])){const ko=kickoffDate(fx[0],fx[2]);if(!ko)continue;const hrs=(ko-now)/36e5;if(hrs<-1||hrs>40)continue;
    const pr=predictMatch(fx[1],fx[3]);if(!pr)continue;
@@ -876,8 +898,10 @@ function bankoCompute(){
    rankH:rH?rH[0]:'-',rankA:rA?rA[0]:'-',ppgH:mH.PPG||'-',ppgA:mA.PPG||'-',
    attH:mH.attack_strength||'-',defH:mH.defence_strength||'-',attA:mA.attack_strength||'-',defA:mA.defence_strength||'-',
    fqH:formQuality(c.hn),fqA:formQuality(c.an)})}
- slug=savedSlug;scored.sort((a,b)=>b.score-a.score);
- _bankoData={ts:Date.now(),scored:scored}}
+ scored.sort((a,b)=>b.score-a.score);
+ _bankoData={ts:Date.now(),scored:scored}
+ }catch(e){console.warn('bankoCompute:',e)}
+ finally{slug=savedSlug;try{syncSelects()}catch(e){}}}
 function bankoDayKey(){return new Date().toLocaleDateString('tr-TR')}
 function bankoHidden(){try{return new Set(JSON.parse(localStorage.getItem('ss_banko_off')||'[]').filter(x=>x.startsWith(bankoDayKey()+'|')))}catch(e){return new Set()}}
 window.bankoHide=(s,h,a)=>{const arr=JSON.parse(localStorage.getItem('ss_banko_off')||'[]').filter(x=>x.startsWith(bankoDayKey()+'|'));
@@ -978,6 +1002,8 @@ const _confOrd={'DÜŞÜK':0,'ORTA':1,'ORTA-YÜKSEK':2,'YÜKSEK':3};
 const _confColor={'DÜŞÜK':'#ff9a9a','ORTA':'#ffd43b','ORTA-YÜKSEK':'#a9e34b','YÜKSEK':'#7ee2a8'};
 function signalScore(I){return I.best[1]*100+(_confOrd[I.conf]||0)*2+I.cov*0.05}
 window.signalGo=(s,h,a,d,tm)=>{slug=s;syncSelects();renderAll();openAnalysis(h,a,d,tm,'fixture')};
+// global slug'i gecici kullanan tum hesaplar bu sarmalayici ile korunur
+function withSlug(tmp,fn){const sv=slug;slug=tmp;try{return fn()}finally{slug=sv;try{syncSelects()}catch(e){}}}
 window.renderSignals=()=>{
  const hrs=+$('sigHours').value||48, now=Date.now(), until=now+hrs*3600e3, since=now-2*3600e3;
  $('sigList').innerHTML='<p class="note">⏳ Maçlar taranıyor ve sinyaller hesaplanıyor…</p>';
@@ -1002,7 +1028,10 @@ window.renderSignals=()=>{
 };
 document.addEventListener('DOMContentLoaded',()=>{const r=$('sigRefresh');if(r)r.onclick=()=>renderSignals();const sh=$('sigHours');if(sh)sh.onchange=()=>renderSignals()});
 document.querySelectorAll('#bottomNav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
-function renderAll(){renderHome();renderLeague();renderMatches()}
+function renderAll(){
+ if(D.leagues&&D.leagues.length&&!D.leagues.some(l=>l[0]===slug))slug=D.leagues[0][0];
+ try{syncSelects()}catch(e){}
+renderHome();renderLeague();renderMatches()}
 renderAll();
 // PWA kurulum
 let deferred;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('installBtn').style.display='block'});
