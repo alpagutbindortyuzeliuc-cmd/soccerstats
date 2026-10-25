@@ -39,7 +39,7 @@ nav.bottom button{flex:1;background:none;border:0;color:var(--mut);padding:9px 2
 .hidden{display:none!important}.favrow{display:flex;gap:8px;align-items:center;margin:10px 0}.favrow input{flex:1}
 @media(min-width:760px){.sheet .panel{left:50%;right:auto;transform:translateX(-50%);width:560px;border-radius:20px;bottom:24px}@keyframes up{from{opacity:.5}}}
 </style></head><body>
-<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">175 Lig • Puan • Form • Gol • Tahmin<br>🔄 Son güncelleme: __UPDATED__</div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
+<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">175 Lig • Puan • Form • Gol • Tahmin<br>🔄 Son güncelleme: <span id="updAt">25.10.2026 03:01</span></div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
 <main>
 <!-- ============ KESFET ============ -->
 <section id="view-home">
@@ -161,6 +161,25 @@ async function loadLineups(){if(!location.protocol.startsWith('http')&&!RB)retur
  try{const r=await fetch(RB+'players.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();PLAYERS=j.teams||PLAYERS}}catch(e){}
  try{const r=await fetch(RB+'squads.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();SQUADS=j.teams||SQUADS}}catch(e){} try{const _lx=JSON.parse(localStorage.getItem('ss_lineups_extra')||'{}');for(const k in _lx){if(!LINEUPS[k])LINEUPS[k]=_lx[k]}}catch(e){}}
 loadLineups();
+// ---- CANLI VERI (puan durumu, siralama, fikstur) - index.html yuklemeden guncellenir ----
+async function loadLiveData(){
+ if(!location.protocol.startsWith('http')&&!RB)return false;
+ try{
+  const r=await fetch(RB+'data.json?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)return false;
+  const j=await r.json();
+  if(!j||!j.S)return false;
+  if(j.leagues&&j.leagues.length)D.leagues=j.leagues;
+  D.S=j.S; if(j.M)D.M=j.M; if(j.F)D.F=j.F; if(j.P)D.P=j.P; if(j.X)D.X=j.X;
+  window.D=D;
+  if(j.updated){try{localStorage.setItem('ss_data_updated',j.updated)}catch(e){}
+   const e2=$('updAt'); if(e2)e2.textContent=j.updated+' (canli)'}
+  try{if(typeof renderAll==='function')renderAll()}catch(e){}
+  return true;
+ }catch(e){return false}
+}
+loadLiveData();
+try{const _du=localStorage.getItem('ss_data_updated');const e3=$('updAt');if(_du&&e3)e3.textContent=_du}catch(e){}
 // ---- CANLI KADRO KONTROLU (FotMob, dogrudan tarayicidan) ----
 const FM_POS={0:'KL',1:'DEF',2:'ORT',3:'FOR'};
 const _liveDone=new Set(); let _liveBusy={}; const _liveTs={}; let _liveTimers={};
@@ -342,7 +361,9 @@ async function ensureSquadsLive(hn,an,dateStr,scoreStr,kind){
 async function fullUpdate(){const b=$('updBtn');if(b){b.disabled=true;b.textContent='⏳ Güncelleniyor…'}
  try{if('serviceWorker' in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update().catch(()=>{})))}
   if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}
+  let _got=false; try{_got=await loadLiveData()}catch(e){}
   await loadLineups();
+  if(!_got){try{await loadLiveData()}catch(e){}}
   const now=new Date();localStorage.setItem('ss_last_full_update',now.toLocaleString('tr-TR'));
   sessionStorage.setItem('ss_just_updated',now.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}));
   if(location.protocol.startsWith('http')){location.reload();return}
@@ -376,7 +397,7 @@ function squadHTML(t){const T=getSquad(slug,t);
  const totV=sq.reduce((a,p)=>a+(+p.val||0),0);
  const labels={KL:'🧤 Kaleciler',DEF:'🛡️ Defans',ORT:'🎯 Orta Saha',FOR:'⚡ Forvet'};
  const groups=['KL','DEF','ORT','FOR'].map(u=>{const g=sq.filter(p=>p.pos===u).sort((a,b)=>(+b.r||0)-(+a.r||0));if(!g.length)return '';
-  return '<h4>'+labels[u]+' ('+g.length+')</h4>'+g.map(p=>'<div class="match"><span class="date">'+(p.no||'')+'</span><span class="tm">'+p.n+(p.age?' <span style="color:var(--mut);font-weight:400">('+p.age+')</span>':'')+(p.inj?' <span style="color:#ff9a9a">🚑 '+p.inj+'</span>':'')+'</span>'+(p.r?'<span class="date">⭐'+(+p.r).toFixed(2)+'</span>':'')+'<span class="date">'+(p.g||0)+'G '+(p.a||0)+'A</span>'+(p.val?'<span class="date">'+fmtVal(p.val)+'</span>':'')+'</div>').join('')}).join('');
+  return '<h4>'+labels[u]+' ('+g.length+')</h4>'+g.map(p=>'<div class="match"><span class="date">'+(p.no||'')+'</span><span class="tm">'+p.n+(p.age?' <span style="color:var(--mut);font-weight:400">('+p.age+')</span>':'')+(p.inj?' <span style="color:#ff9a9a">🚑 '+p.inj+'</span>':'')+'</span>'+(p.r?'<span class="date">'+(T.source==='FlashScore'?'⭐':'⭐')+(+p.r).toFixed(2)+'</span>':'')+'<span class="date">'+(p.g||0)+'G '+(p.a||0)+'A</span>'+(p.val?'<span class="date">'+fmtVal(p.val)+'</span>':'')+'</div>').join('')}).join('');
  return '<h3>👥 Kadro ('+sq.length+' oyuncu)</h3>'+(T.derived?'<p class="note">📋 '+T.derived+'</p>':'')+'<p class="note">'+(T.coach?'Teknik direktör: <b>'+T.coach+'</b> • ':'')+'Ort. reyting: <b>'+avgR+'</b> • Kadro değeri: <b>'+fmtVal(totV)+'</b> • Sakat: <b>'+inj.length+'</b>'+(inj.length?' ('+inj.map(p=>p.n).join(', ')+')':'')+'<br>Kaynak: FotMob ('+(T.fotmob||t)+') • ⭐ sezon reytingi, G/A = gol/asist</p>'+groups}
 
 // ---- OYUNCU GUCU ----
