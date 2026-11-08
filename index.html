@@ -1,6 +1,7 @@
 <!DOCTYPE html><html lang="tr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SoccerSTATS — Tüm Ligler & Tahmin</title>
+<script>(function(){try{var MY=44;if(!("serviceWorker" in navigator))return;fetch("sw.js",{cache:"no-store"}).then(function(r){return r.text()}).then(function(t){var m=t.match(/soccerstats-v(\d+)/);if(!m)return;var SWV=+m[1];if(SWV>MY&&!sessionStorage.getItem("ss_heal")){sessionStorage.setItem("ss_heal","1");Promise.all([navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}),caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))})]).then(function(){location.reload()}).catch(function(){})}}).catch(function(){})}catch(e){}})();</script>
 <meta name="theme-color" content="#0e7c4a"><meta name="description" content="100 lig, gol istatistikleri, takım verileri, maçlar ve tahmin aracı">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
@@ -39,7 +40,7 @@ nav.bottom button{flex:1;background:none;border:0;color:var(--mut);padding:9px 2
 .hidden{display:none!important}.favrow{display:flex;gap:8px;align-items:center;margin:10px 0}.favrow input{flex:1}
 @media(min-width:760px){.sheet .panel{left:50%;right:auto;transform:translateX(-50%);width:560px;border-radius:20px;bottom:24px}@keyframes up{from{opacity:.5}}}
 </style></head><body>
-<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">100 Lig • Puan • Form • Gol • Tahmin<br>🔄 Son güncelleme: <span id="updAt">08.11.2026 02:28</span></div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
+<header><div class="logo">⚽</div><div><h1>SoccerSTATS</h1><div class="sub">100 Lig • Gol • Kadro • Tahmin<br>🔄 Son güncelleme: <span id="updAt">08.11.2026 03:21</span></div></div><button id="updBtn" onclick="fullUpdate()" title="Kadrolar, ilk 11ler, oyuncu verileri ve sayfa önbelleği tamamen yenilenir">🔄 Komple Güncelle</button><button id="installBtn">📲 Uygulamayı Kur</button></header>
 <main>
 <!-- ============ KESFET ============ -->
 <section id="view-home">
@@ -152,7 +153,6 @@ function trow(cells,teamIdx){return `<tr>${cells.map((c,i)=>i===teamIdx?`<td cla
 // ---- TEK LIGI CANLI GUNCELLE (FotMob) ----
 const _lgTs={};
 let _lgSilent=false;
-function _lgRefreshStatus(msg,ok){if(_lgSilent)return;const b=$('lgRefreshBtn');if(!b)return;b.textContent=msg;b.disabled=(msg.indexOf('⏳')===0);if(ok!==undefined)setTimeout(()=>{b.textContent='🔄 Puan Durumunu Güncelle';b.disabled=false},ok?4500:3500)}
 function _pct(c,n){return n?Math.round(100*c/n)+'%':''}
 async function refreshLeagueLive(force,s0opt){
  const s0=s0opt||slug, lid=FMLG[s0];
